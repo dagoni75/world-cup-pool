@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { FAVORITE_TEAM_OPTIONS } from "./favorite-teams";
 import { predictionPoints } from "./scoring";
 import { Match, Player, PoolData, Prediction } from "./types";
 
@@ -653,11 +654,7 @@ export async function saveFavoriteTeam(player: Player, favoriteTeam: string) {
   await requireSession(player);
 
   const normalizedFavoriteTeam = favoriteTeam.trim();
-  const teams = new Set(
-    (await loadMatches())
-      .filter(isGroupMatch)
-      .flatMap((match) => [match.team_a, match.team_b]),
-  );
+  const teams = new Set(FAVORITE_TEAM_OPTIONS);
 
   if (!teams.has(normalizedFavoriteTeam)) {
     throw new Error("Choose a valid team.");
@@ -675,6 +672,7 @@ export async function loadPool(player: Player): Promise<PoolData> {
   await requireSession(player);
 
   const matchRows = await ensureKnockoutMatches(await loadMatches());
+  const favoriteTeamOptions = FAVORITE_TEAM_OPTIONS;
 
   const [myPredictionsResult, playersResult, allPredictionsResult] = await Promise.all([
     supabase
@@ -872,7 +870,7 @@ export async function loadPool(player: Player): Promise<PoolData> {
       }
     : null;
 
-  return { matches, predictions, leaderboard, profiles, adminDashboard };
+  return { matches, predictions, leaderboard, profiles, favoriteTeamOptions, adminDashboard };
 }
 
 export async function savePrediction(player: Player, prediction: Prediction) {

@@ -70,5 +70,6 @@ export type PoolData = {
   predictions: Prediction[];
   leaderboard: LeaderboardRow[];
   profiles: PlayerProfile[];
+  favoriteTeamOptions: string[];
   adminDashboard: AdminDashboard | null;
 };

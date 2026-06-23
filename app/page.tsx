@@ -78,7 +78,7 @@ function Login({ onLogin }: { onLogin: (player: Player) => void }) {
         <p className="mt-5 max-w-sm text-base leading-7 text-ink/65">Make your picks before kickoff and follow the leaderboard as results come in.</p>
         <form onSubmit={submit} className="mt-9 rounded-3xl bg-white p-5 shadow-card">
           <label className="block text-sm font-bold">Your name<input autoComplete="name" className="mt-2 h-12 w-full rounded-xl border border-black/10 px-4 outline-none focus:border-pitch focus:ring-2 focus:ring-pitch/15" placeholder="e.g. Jamie" value={name} onChange={(e) => setName(e.target.value)} /></label>
-          <label className="mt-4 block text-sm font-bold">Your PIN<input autoComplete="current-password" className="mt-2 h-12 w-full rounded-xl border border-black/10 px-4 tracking-[0.3em] outline-none focus:border-pitch focus:ring-2 focus:ring-pitch/15" inputMode="numeric" minLength={4} placeholder="â€¢â€¢â€¢â€¢" type="password" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))} /></label>
+          <label className="mt-4 block text-sm font-bold">Your PIN<input autoComplete="current-password" className="mt-2 h-12 w-full rounded-xl border border-black/10 px-4 tracking-[0.3em] outline-none focus:border-pitch focus:ring-2 focus:ring-pitch/15" inputMode="numeric" minLength={4} placeholder="0000" type="password" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))} /></label>
           {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-700">{error}</p>}
           <button disabled={busy} className="mt-5 h-12 w-full rounded-xl bg-pitch font-bold text-white transition hover:bg-pitch/90 disabled:opacity-60">{busy ? "Signing in..." : "Enter the pool"}</button>
         </form>
@@ -95,13 +95,13 @@ function pointBreakdown(prediction: Prediction, match: Match) {
   const items: { label: string; points: number }[] = [];
 
   if (Math.sign(predictedGoalDifference) === Math.sign(actualGoalDifference)) {
-    items.push({ label: "âš½ Correct outcome", points: 3 });
+    items.push({ label: "Correct outcome", points: 3 });
   }
   if (prediction.teamAScore === match.teamAScore && prediction.teamBScore === match.teamBScore) {
-    items.push({ label: "â­ Exact score bonus", points: 2 });
+    items.push({ label: "Exact score bonus", points: 2 });
   }
   if (predictedGoalDifference === actualGoalDifference) {
-    items.push({ label: "ðŸ“ˆ Goal difference", points: 1 });
+    items.push({ label: "Goal difference", points: 1 });
   }
   if (prediction.teamAScore === match.teamAScore) {
     items.push({ label: `${match.teamA} goals`, points: 1 });
@@ -110,7 +110,7 @@ function pointBreakdown(prediction: Prediction, match: Match) {
     items.push({ label: `${match.teamB} goals`, points: 1 });
   }
 
-  return items.length > 0 ? items : [{ label: "âŒ No points", points: 0 }];
+  return items.length > 0 ? items : [{ label: "No points", points: 0 }];
 }
 
 function MatchCard({
@@ -510,17 +510,7 @@ export default function Home() {
     () => bracketMatches.filter((match) => match.stage === bracketStage),
     [bracketMatches, bracketStage],
   );
-  const worldCupTeams = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          data?.matches
-            .filter(isGroupStage)
-            .flatMap((match) => [match.teamA, match.teamB]) ?? [],
-        ),
-      ).sort((a, b) => a.localeCompare(b)),
-    [data],
-  );
+  const worldCupTeams = data?.favoriteTeamOptions ?? [];
   if (!player) return <Login onLogin={setPlayer} />;
   const testToolsEnabled =
     player.isAdmin &&
@@ -674,7 +664,7 @@ export default function Home() {
             ))}
             {data && data.leaderboard.length === 0 && <p className="p-8 text-center text-sm text-ink/50">No players yet.</p>}
           </div>
-          <div className="mt-5 rounded-2xl border border-black/[0.06] p-4 text-xs leading-6 text-ink/60"><strong className="text-ink">Scoring:</strong> 3 outcome Â· 2 exact score Â· 1 goal difference Â· 1 each correct team score</div>
+          <div className="mt-5 rounded-2xl border border-black/[0.06] p-4 text-xs leading-6 text-ink/60"><strong className="text-ink">Scoring:</strong> 3 outcome / 2 exact score / 1 goal difference / 1 each correct team score</div>
         </section>
       ) : tab === "admin" && player.isAdmin ? (
         <section className="mt-6">
