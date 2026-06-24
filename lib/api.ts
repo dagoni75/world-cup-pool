@@ -25,6 +25,13 @@ type MatchRow = {
   team_b_pk_score: number | null;
 };
 
+type PlayerRow = {
+  id: string;
+  name: string;
+  is_admin: boolean;
+  favorite_team: string | null;
+};
+
 type TeamStanding = {
   team: string;
   group: string;
@@ -59,7 +66,6 @@ const KNOCKOUT_SLOT_COUNTS = [
   { stage: "Final", prefix: "FINAL", count: 1 },
 ];
 const KNOCKOUT_EXPECTED_SCORES = new Map(KNOCKOUT_SLOT_COUNTS.map((item) => [item.stage, item.count]));
-const DUPLICATE_PLAYER_NAME_MESSAGE = "Player name already in use. Please choose a different name.";
 const OFFICIAL_SCORES_SO_FAR: OfficialResult[] = [
   { teamA: "Mexico", teamB: "South Africa", teamAScore: 2, teamBScore: 0 },
   { teamA: "South Korea", teamB: "Czechia", teamAScore: 2, teamBScore: 1 },
@@ -135,14 +141,6 @@ function testKnockoutScore() {
 
 function normalizePlayerName(name: string) {
   return name.trim();
-}
-
-function escapeLikePattern(value: string) {
-  return value.replace(/[\\%_]/g, "\\$&");
-}
-
-function samePlayerName(left: string, right: string) {
-  return left.trim().toLowerCase() === right.trim().toLowerCase();
 }
 
 function normalizeTeamName(name: string) {
@@ -410,7 +408,36 @@ async function loadMatches() {
   return unwrap(data, error) as MatchRow[];
 }
 
-async function assignMissingBracketSlots(matchRows: MatchRow[]) {
+async function adminUpsertMatch(player: Player, match: Omit<MatchRow, "id"> & { id?: string }) {
+  const { data, error } = await supabase.rpc("app_admin_upsert_match", {
+    p_player_id: player.id,
+    p_token: player.token,
+    p_match_id: match.id ?? null,
+    p_team_a: match.team_a,
+    p_team_b: match.team_b,
+    p_starts_at: match.starts_at,
+    p_stage: match.stage,
+    p_bracket_slot: match.bracket_slot,
+    p_team_a_score: match.team_a_score,
+    p_team_b_score: match.team_b_score,
+    p_team_a_pk_score: match.team_a_pk_score,
+    p_team_b_pk_score: match.team_b_pk_score,
+  });
+
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+async function adminDeleteKnockoutMatches(player: Player) {
+  const { error } = await supabase.rpc("app_admin_delete_knockout_matches", {
+    p_player_id: player.id,
+    p_token: player.token,
+  });
+
+  if (error) throw new Error(error.message);
+}
+
+async function assignMissingBracketSlots(matchRows: MatchRow[], player: Player) {
   let changed = false;
 
   for (const config of KNOCKOUT_SLOT_COUNTS) {
@@ -431,12 +458,7 @@ async function assignMissingBracketSlots(matchRows: MatchRow[]) {
       usedIds.add(row.id);
 
       if (row.bracket_slot !== slot) {
-        const { error } = await supabase
-          .from("matches")
-          .update({ bracket_slot: slot })
-          .eq("id", row.id);
-
-        if (error) throw new Error(error.message);
+        await adminUpsertMatch(player, { ...row, bracket_slot: slot });
         row.bracket_slot = slot;
         changed = true;
       }
@@ -446,8 +468,8 @@ async function assignMissingBracketSlots(matchRows: MatchRow[]) {
   return changed ? loadMatches() : matchRows;
 }
 
-async function ensureKnockoutMatches(matchRows: MatchRow[]) {
-  const slottedRows = await assignMissingBracketSlots(matchRows);
+async function ensureKnockoutMatches(matchRows: MatchRow[], player: Player) {
+  const slottedRows = await assignMissingBracketSlots(matchRows, player);
   const plan = buildKnockoutPlan(slottedRows);
   if (plan.length === 0) return slottedRows;
 
@@ -460,32 +482,13 @@ async function ensureKnockoutMatches(matchRows: MatchRow[]) {
     );
 
     if (!current) {
-      const { error } = await supabase.from("matches").insert({
+      await adminUpsertMatch(player, {
         ...plannedMatch,
         team_a_score: null,
         team_b_score: null,
         team_a_pk_score: null,
         team_b_pk_score: null,
       });
-      if (error?.code === "23505") {
-        const { error: updateError } = await supabase
-          .from("matches")
-          .update({
-            team_a: plannedMatch.team_a,
-            team_b: plannedMatch.team_b,
-            starts_at: plannedMatch.starts_at,
-            team_a_score: null,
-            team_b_score: null,
-            team_a_pk_score: null,
-            team_b_pk_score: null,
-          })
-          .eq("stage", plannedMatch.stage)
-          .eq("bracket_slot", plannedMatch.bracket_slot);
-
-        if (updateError) throw new Error(updateError.message);
-      } else if (error) {
-        throw new Error(error.message);
-      }
       changed = true;
       continue;
     }
@@ -495,21 +498,17 @@ async function ensureKnockoutMatches(matchRows: MatchRow[]) {
       current.team_b !== plannedMatch.team_b ||
       !sameInstant(current.starts_at, plannedMatch.starts_at)
     ) {
-      const { error } = await supabase
-        .from("matches")
-        .update({
-          team_a: plannedMatch.team_a,
-          team_b: plannedMatch.team_b,
-          starts_at: plannedMatch.starts_at,
-          bracket_slot: plannedMatch.bracket_slot,
-          team_a_score: null,
-          team_b_score: null,
-          team_a_pk_score: null,
-          team_b_pk_score: null,
-        })
-        .eq("id", current.id);
-
-      if (error) throw new Error(error.message);
+      await adminUpsertMatch(player, {
+        ...current,
+        team_a: plannedMatch.team_a,
+        team_b: plannedMatch.team_b,
+        starts_at: plannedMatch.starts_at,
+        bracket_slot: plannedMatch.bracket_slot,
+        team_a_score: null,
+        team_b_score: null,
+        team_a_pk_score: null,
+        team_b_pk_score: null,
+      });
       changed = true;
     }
   }
@@ -517,94 +516,41 @@ async function ensureKnockoutMatches(matchRows: MatchRow[]) {
   return loadMatches();
 }
 
-async function ensureRoundOf32Matches() {
-  const matches = await ensureKnockoutMatches(await loadMatches());
+async function ensureRoundOf32Matches(player: Player) {
+  const matches = await ensureKnockoutMatches(await loadMatches(), player);
   const roundOf32Matches = matches.filter((match) => match.stage === "Round of 32");
   if (roundOf32Matches.length > 0) return matches;
 
-  const rebuiltMatches = await ensureKnockoutMatches(await loadMatches());
+  const rebuiltMatches = await ensureKnockoutMatches(await loadMatches(), player);
   if (rebuiltMatches.some((match) => match.stage === "Round of 32")) return rebuiltMatches;
 
   throw new Error("Round of 32 matches are not ready. Generate group results first.");
 }
 
 async function requireSession(player: Player) {
-  const { data: session, error: sessionError } = await supabase
-    .from("player_sessions")
-    .select("player_id, expires_at")
-    .eq("token", player.token)
-    .eq("player_id", player.id)
-    .maybeSingle();
+  const { data, error } = await supabase
+    .rpc("app_require_session", { p_player_id: player.id, p_token: player.token })
+    .single();
 
-  if (sessionError) throw new Error(sessionError.message);
-  if (!session || new Date(session.expires_at) <= new Date()) {
-    throw new Error("Session expired. Please sign in again.");
-  }
-
-  const { data: currentPlayer, error: playerError } = await supabase
-    .from("players")
-    .select("id, name, is_admin, favorite_team")
-    .eq("id", player.id)
-    .maybeSingle();
-
-  if (playerError) throw new Error(playerError.message);
-  if (!currentPlayer) throw new Error("Player not found.");
-  return currentPlayer;
+  if (error) throw new Error(error.message);
+  return data as PlayerRow;
 }
 
 export async function login(name: string, pin: string): Promise<Player> {
   const normalizedName = normalizePlayerName(name);
-  const namePattern = escapeLikePattern(normalizedName);
-  const { data: existing, error: playerError } = await supabase
-    .from("players")
-    .select("id, name, pin, is_admin, favorite_team, created_at")
-    .ilike("name", namePattern)
-    .order("created_at", { ascending: true });
-
-  if (playerError) throw new Error(playerError.message);
-
-  let currentPlayer = existing?.find((player) => samePlayerName(player.name, normalizedName)) ?? null;
-  if (currentPlayer && currentPlayer.pin !== pin) {
-    throw new Error(DUPLICATE_PLAYER_NAME_MESSAGE);
-  }
-
-  if (!currentPlayer) {
-    const { data, error } = await supabase
-      .from("players")
-      .insert({ name: normalizedName, pin, is_admin: false })
-      .select("id, name, pin, is_admin, favorite_team, created_at")
-      .single();
-
-    if (error?.code === "23505") {
-      const { data: concurrentPlayer, error: concurrentError } = await supabase
-        .from("players")
-        .select("id, name, pin, is_admin, favorite_team, created_at")
-        .ilike("name", namePattern)
-        .order("created_at", { ascending: true });
-
-      if (concurrentError) throw new Error(concurrentError.message);
-      currentPlayer =
-        concurrentPlayer?.find((player) => samePlayerName(player.name, normalizedName)) ?? null;
-      throw new Error(DUPLICATE_PLAYER_NAME_MESSAGE);
-    } else {
-      currentPlayer = unwrap(data, error);
-    }
-  }
-
-  if (!currentPlayer) throw new Error("Could not sign in.");
-
-  const { data: session, error: sessionError } = await supabase
-    .from("player_sessions")
-    .insert({ player_id: currentPlayer.id })
-    .select("token")
+  const { data, error } = await supabase
+    .rpc("app_login_player", { p_name: normalizedName, p_pin: pin })
     .single();
 
+  if (error) throw new Error(error.message);
+
+  const row = unwrap(data, error) as PlayerRow & { token: string };
   return {
-    id: currentPlayer.id,
-    name: currentPlayer.name,
-    isAdmin: currentPlayer.is_admin,
-    favoriteTeam: currentPlayer.favorite_team ?? null,
-    token: unwrap(session, sessionError).token,
+    id: row.id,
+    name: row.name,
+    isAdmin: row.is_admin,
+    favoriteTeam: row.favorite_team ?? null,
+    token: row.token,
   };
 }
 
@@ -614,8 +560,6 @@ export async function changePin(
   newPin: string,
   confirmNewPin: string,
 ) {
-  await requireSession(player);
-
   if (!/^\d{4,8}$/.test(newPin)) {
     throw new Error("PIN must be 4 to 8 digits.");
   }
@@ -623,30 +567,13 @@ export async function changePin(
     throw new Error("New PINs do not match.");
   }
 
-  const { data: currentPlayer, error: currentPlayerError } = await supabase
-    .from("players")
-    .select("id, pin")
-    .eq("id", player.id)
-    .maybeSingle();
+  const { error } = await supabase.rpc("app_change_pin", {
+    p_player_id: player.id,
+    p_token: player.token,
+    p_current_pin: currentPin,
+    p_new_pin: newPin,
+  });
 
-  if (currentPlayerError) throw new Error(currentPlayerError.message);
-  if (!currentPlayer || currentPlayer.pin !== currentPin) {
-    throw new Error("Current PIN is incorrect.");
-  }
-
-  const { data: duplicatePin, error: duplicatePinError } = await supabase
-    .from("players")
-    .select("id")
-    .eq("pin", newPin)
-    .neq("id", player.id)
-    .limit(1);
-
-  if (duplicatePinError) throw new Error(duplicatePinError.message);
-  if ((duplicatePin?.length ?? 0) > 0) {
-    throw new Error("PIN already in use. Please choose a different PIN.");
-  }
-
-  const { error } = await supabase.from("players").update({ pin: newPin }).eq("id", player.id);
   if (error) throw new Error(error.message);
 }
 
@@ -660,18 +587,22 @@ export async function saveFavoriteTeam(player: Player, favoriteTeam: string) {
     throw new Error("Choose a valid team.");
   }
 
-  const { error } = await supabase
-    .from("players")
-    .update({ favorite_team: normalizedFavoriteTeam })
-    .eq("id", player.id);
+  const { error } = await supabase.rpc("app_save_favorite_team", {
+    p_player_id: player.id,
+    p_token: player.token,
+    p_favorite_team: normalizedFavoriteTeam,
+  });
 
   if (error) throw new Error(error.message);
 }
 
 export async function loadPool(player: Player): Promise<PoolData> {
-  await requireSession(player);
+  const currentPlayer = await requireSession(player);
 
-  const matchRows = await ensureKnockoutMatches(await loadMatches());
+  const initialMatchRows = await loadMatches();
+  const matchRows = currentPlayer.is_admin
+    ? await ensureKnockoutMatches(initialMatchRows, player)
+    : initialMatchRows;
   const favoriteTeamOptions = FAVORITE_TEAM_OPTIONS;
 
   const [myPredictionsResult, playersResult, allPredictionsResult] = await Promise.all([
@@ -892,16 +823,13 @@ export async function savePrediction(player: Player, prediction: Prediction) {
     throw new Error("This match has started. Predictions are locked.");
   }
 
-  const { error } = await supabase.from("predictions").upsert(
-    {
-      player_id: player.id,
-      match_id: prediction.matchId,
-      team_a_score: prediction.teamAScore,
-      team_b_score: prediction.teamBScore,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "player_id,match_id" },
-  );
+  const { error } = await supabase.rpc("app_save_prediction", {
+    p_player_id: player.id,
+    p_token: player.token,
+    p_match_id: prediction.matchId,
+    p_team_a_score: prediction.teamAScore,
+    p_team_b_score: prediction.teamBScore,
+  });
 
   if (error) throw new Error(error.message);
 }
@@ -950,16 +878,19 @@ export async function saveResult(
     penaltyScores = { team_a_pk_score: teamAPkScore, team_b_pk_score: teamBPkScore };
   }
 
-  const { data, error } = await supabase
-    .from("matches")
-    .update({ team_a_score: teamAScore, team_b_score: teamBScore, ...penaltyScores })
-    .eq("id", matchId)
-    .select("id")
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("app_admin_set_match_result", {
+    p_player_id: player.id,
+    p_token: player.token,
+    p_match_id: matchId,
+    p_team_a_score: teamAScore,
+    p_team_b_score: teamBScore,
+    p_team_a_pk_score: penaltyScores.team_a_pk_score,
+    p_team_b_pk_score: penaltyScores.team_b_pk_score,
+  });
 
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Match not found.");
-  await ensureKnockoutMatches(await loadMatches());
+  await ensureKnockoutMatches(await loadMatches(), player);
 }
 
 export async function generateTestGroupResults(player: Player) {
@@ -969,46 +900,35 @@ export async function generateTestGroupResults(player: Player) {
   const groupMatches = (await loadMatches()).filter(isGroupMatch);
 
   for (const match of groupMatches) {
-    const { error } = await supabase
-      .from("matches")
-      .update({
-        team_a_score: testScore(),
-        team_b_score: testScore(),
-        team_a_pk_score: null,
-        team_b_pk_score: null,
-      })
-      .eq("id", match.id);
-
-    if (error) throw new Error(error.message);
+    await adminUpsertMatch(player, {
+      ...match,
+      team_a_score: testScore(),
+      team_b_score: testScore(),
+      team_a_pk_score: null,
+      team_b_pk_score: null,
+    });
   }
 
-  await ensureKnockoutMatches(await loadMatches());
+  await ensureKnockoutMatches(await loadMatches(), player);
 }
 
-async function generateTestScoresForStage(stage: string) {
-  const matches = await ensureKnockoutMatches(await loadMatches());
+async function generateTestScoresForStage(player: Player, stage: string) {
+  const matches = await ensureKnockoutMatches(await loadMatches(), player);
   const stageMatches = matches.filter((match) => match.stage === stage).sort(sortKnockoutRows);
   if (stageMatches.length === 0) throw new Error(`No ${stage} matches found.`);
 
   for (const match of stageMatches) {
     const { teamAScore, teamBScore } = testKnockoutScore();
-    const { data, error } = await supabase
-      .from("matches")
-      .update({
-        team_a_score: teamAScore,
-        team_b_score: teamBScore,
-        team_a_pk_score: null,
-        team_b_pk_score: null,
-      })
-      .eq("id", match.id)
-      .select("id")
-      .maybeSingle();
-
-    if (error) throw new Error(error.message);
-    if (!data) throw new Error(`Could not save ${stage} result for ${match.team_a} vs ${match.team_b}.`);
+    await adminUpsertMatch(player, {
+      ...match,
+      team_a_score: teamAScore,
+      team_b_score: teamBScore,
+      team_a_pk_score: null,
+      team_b_pk_score: null,
+    });
   }
 
-  await ensureKnockoutMatches(await loadMatches());
+  await ensureKnockoutMatches(await loadMatches(), player);
   await verifyScoredStage(stage);
 }
 
@@ -1036,10 +956,9 @@ export async function resetTestKnockoutBracket(player: Player) {
   const currentPlayer = await requireSession(player);
   if (!currentPlayer.is_admin) throw new Error("Admin access required.");
 
-  const { error } = await supabase.from("matches").delete().in("stage", [...KNOCKOUT_STAGES]);
-  if (error) throw new Error(error.message);
+  await adminDeleteKnockoutMatches(player);
 
-  await ensureKnockoutMatches(await loadMatches());
+  await ensureKnockoutMatches(await loadMatches(), player);
 }
 
 export async function resetTestResults(player: Player) {
@@ -1050,21 +969,18 @@ export async function resetTestResults(player: Player) {
   const groupMatchIds = matches.filter(isGroupMatch).map((match) => match.id);
 
   if (groupMatchIds.length > 0) {
-    const { error } = await supabase
-      .from("matches")
-      .update({
+    for (const match of matches.filter(isGroupMatch)) {
+      await adminUpsertMatch(player, {
+        ...match,
         team_a_score: null,
         team_b_score: null,
         team_a_pk_score: null,
         team_b_pk_score: null,
-      })
-      .in("id", groupMatchIds);
-
-    if (error) throw new Error(error.message);
+      });
+    }
   }
 
-  const { error } = await supabase.from("matches").delete().in("stage", [...KNOCKOUT_STAGES]);
-  if (error) throw new Error(error.message);
+  await adminDeleteKnockoutMatches(player);
 }
 
 export async function importOfficialScoresSoFar(player: Player) {
@@ -1088,47 +1004,40 @@ export async function importOfficialScoresSoFar(player: Player) {
     const teamBScore = resultMatchesTeamOrder ? result.teamBScore : result.teamAScore;
     const startsAt =
       new Date(match.starts_at).getTime() <= Date.now() ? match.starts_at : lockedAt;
-    const { error } = await supabase
-      .from("matches")
-      .update({
-        team_a_score: teamAScore,
-        team_b_score: teamBScore,
-        team_a_pk_score: null,
-        team_b_pk_score: null,
-        starts_at: startsAt,
-      })
-      .eq("id", match.id);
-
-    if (error) throw new Error(error.message);
+    await adminUpsertMatch(player, {
+      ...match,
+      team_a_score: teamAScore,
+      team_b_score: teamBScore,
+      team_a_pk_score: null,
+      team_b_pk_score: null,
+      starts_at: startsAt,
+    });
   }
+
+  await ensureKnockoutMatches(await loadMatches(), player);
 }
 
 export async function generateFullTestTournament(player: Player) {
   const currentPlayer = await requireSession(player);
   if (!currentPlayer.is_admin) throw new Error("Admin access required.");
 
-  const { error: deleteError } = await supabase.from("matches").delete().in("stage", [...KNOCKOUT_STAGES]);
-  if (deleteError) throw new Error(deleteError.message);
+  await adminDeleteKnockoutMatches(player);
 
   const groupMatches = (await loadMatches()).filter(isGroupMatch);
   for (const match of groupMatches) {
-    const { error } = await supabase
-      .from("matches")
-      .update({
-        team_a_score: testScore(),
-        team_b_score: testScore(),
-        team_a_pk_score: null,
-        team_b_pk_score: null,
-      })
-      .eq("id", match.id);
-
-    if (error) throw new Error(error.message);
+    await adminUpsertMatch(player, {
+      ...match,
+      team_a_score: testScore(),
+      team_b_score: testScore(),
+      team_a_pk_score: null,
+      team_b_pk_score: null,
+    });
   }
 
-  await ensureKnockoutMatches(await loadMatches());
+  await ensureKnockoutMatches(await loadMatches(), player);
 
   for (const stage of KNOCKOUT_STAGES) {
-    await generateTestScoresForStage(stage);
+    await generateTestScoresForStage(player, stage);
   }
 
   await verifyFullTestTournament();
