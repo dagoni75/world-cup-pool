@@ -134,6 +134,13 @@ function MatchCard({
   const locked = new Date(match.startsAt) <= new Date();
   const completed = match.teamAScore !== null && match.teamBScore !== null;
   const knockout = KNOCKOUT_STAGES.some((option) => option.stage === match.stage);
+  const isPlaceholder =
+    !match.teamA ||
+    !match.teamB ||
+    match.teamA === "TBD" ||
+    match.teamB === "TBD" ||
+    match.teamA.startsWith("Winner") ||
+    match.teamB.startsWith("Winner");
   const hasPenaltyResult =
     knockout &&
     completed &&
@@ -180,7 +187,11 @@ function MatchCard({
       </div>
       <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         <div className="text-right font-extrabold leading-tight">{match.teamA}</div>
-        <div className="flex items-center gap-2"><ScoreInput label={`${match.teamA} goals`} value={a} onChange={setA} disabled={showOfficialResult || (!admin && locked)} /><span className="font-bold text-ink/30">:</span><ScoreInput label={`${match.teamB} goals`} value={b} onChange={setB} disabled={showOfficialResult || (!admin && locked)} /></div>
+        {isPlaceholder ? (
+          <div className="max-w-36 text-center text-xs font-bold leading-4 text-ink/45">Bracket not determined yet</div>
+        ) : (
+          <div className="flex items-center gap-2"><ScoreInput label={`${match.teamA} goals`} value={a} onChange={setA} disabled={showOfficialResult || (!admin && locked)} /><span className="font-bold text-ink/30">:</span><ScoreInput label={`${match.teamB} goals`} value={b} onChange={setB} disabled={showOfficialResult || (!admin && locked)} /></div>
+        )}
         <div className="font-extrabold leading-tight">{match.teamB}</div>
       </div>
       {hasPenaltyResult && (
@@ -238,7 +249,7 @@ function MatchCard({
             ) : ""
           )}
         </span>
-        {!showOfficialResult && (!locked || admin) && <button onClick={submit} disabled={!canSubmit} className="rounded-lg bg-ink px-4 py-2 text-xs font-bold text-white disabled:opacity-30">{admin ? "Set final" : "Save pick"}</button>}
+        {!isPlaceholder && !showOfficialResult && (!locked || admin) && <button onClick={submit} disabled={!canSubmit} className="rounded-lg bg-ink px-4 py-2 text-xs font-bold text-white disabled:opacity-30">{admin ? "Set final" : "Save pick"}</button>}
       </div>
     </article>
   );
