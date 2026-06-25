@@ -62,6 +62,7 @@ function Login({ onLogin }: { onLogin: (player: Player) => void }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [scoringOpen, setScoringOpen] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -76,6 +77,7 @@ function Login({ onLogin }: { onLogin: (player: Player) => void }) {
         <div className="mb-8 inline-flex rounded-full bg-lime px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-pitch">World Cup 2026</div>
         <h1 className="max-w-sm text-5xl font-black leading-[0.95] tracking-[-0.055em]">Call the score.<br /><span className="text-pitch">Claim the table.</span></h1>
         <p className="mt-5 max-w-sm text-base leading-7 text-ink/65">Make your picks before kickoff and follow the leaderboard as results come in.</p>
+        <button type="button" onClick={() => setScoringOpen(true)} className="mt-5 h-11 rounded-xl border border-black/10 bg-white px-4 text-sm font-bold text-ink shadow-sm transition hover:bg-black/[0.03] focus:outline-none focus:ring-2 focus:ring-pitch/20">How scoring works</button>
         <form onSubmit={submit} className="mt-9 rounded-3xl bg-white p-5 shadow-card">
           <label className="block text-sm font-bold">Your name<input autoComplete="name" className="mt-2 h-12 w-full rounded-xl border border-black/10 px-4 outline-none focus:border-pitch focus:ring-2 focus:ring-pitch/15" placeholder="e.g. Jamie" value={name} onChange={(e) => setName(e.target.value)} /></label>
           <label className="mt-4 block text-sm font-bold">Your PIN<input autoComplete="current-password" className="mt-2 h-12 w-full rounded-xl border border-black/10 px-4 tracking-[0.3em] outline-none focus:border-pitch focus:ring-2 focus:ring-pitch/15" inputMode="numeric" minLength={4} placeholder="0000" type="password" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))} /></label>
@@ -83,6 +85,27 @@ function Login({ onLogin }: { onLogin: (player: Player) => void }) {
           <button disabled={busy} className="mt-5 h-12 w-full rounded-xl bg-pitch font-bold text-white transition hover:bg-pitch/90 disabled:opacity-60">{busy ? "Signing in..." : "Enter the pool"}</button>
         </form>
       </section>
+      {scoringOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/35 px-5 py-8" role="dialog" aria-modal="true" aria-labelledby="scoring-title">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-card">
+            <div className="flex items-start justify-between gap-4">
+              <h2 id="scoring-title" className="text-xl font-black">How scoring works</h2>
+              <button type="button" onClick={() => setScoringOpen(false)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/10 text-lg font-black text-ink/55 transition hover:bg-black/[0.03]" aria-label="Close scoring details">&times;</button>
+            </div>
+            <div className="mt-4 space-y-2 text-sm font-semibold leading-6 text-ink/70">
+              <div className="flex justify-between gap-4 rounded-xl bg-black/[0.03] px-3 py-2"><span>Exact score</span><span className="font-black text-pitch">5 points</span></div>
+              <div className="flex justify-between gap-4 rounded-xl bg-black/[0.03] px-3 py-2"><span>Correct winner or correct draw</span><span className="font-black text-pitch">3 points</span></div>
+              <div className="flex justify-between gap-4 rounded-xl bg-black/[0.03] px-3 py-2"><span>Wrong prediction</span><span className="font-black text-ink">0 points</span></div>
+            </div>
+            <div className="mt-4 border-t border-black/[0.06] pt-4 text-sm font-semibold leading-6 text-ink/65">
+              <p>Picks lock at kickoff.</p>
+              <p>Picks can be changed until kickoff.</p>
+              <p>Highest total points wins.</p>
+            </div>
+            <button type="button" onClick={() => setScoringOpen(false)} className="mt-5 h-11 w-full rounded-xl bg-ink text-sm font-bold text-white transition hover:bg-ink/90">Close</button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
