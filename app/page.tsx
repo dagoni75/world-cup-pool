@@ -93,8 +93,18 @@ function Login({ onLogin }: { onLogin: (player: Player) => void }) {
               <button type="button" onClick={() => setScoringOpen(false)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/10 text-lg font-black text-ink/55 transition hover:bg-black/[0.03]" aria-label="Close scoring details">&times;</button>
             </div>
             <div className="mt-4 space-y-2 text-sm font-semibold leading-6 text-ink/70">
-              <div className="flex justify-between gap-4 rounded-xl bg-black/[0.03] px-3 py-2"><span>Exact score</span><span className="font-black text-pitch">5 points</span></div>
-              <div className="flex justify-between gap-4 rounded-xl bg-black/[0.03] px-3 py-2"><span>Correct winner or correct draw</span><span className="font-black text-pitch">3 points</span></div>
+              <div className="rounded-xl bg-black/[0.03] px-3 py-2">
+                <div className="flex justify-between gap-4"><span>Exact score</span><span className="font-black text-pitch">5 points</span></div>
+                <p className="mt-1 text-xs leading-5 text-ink/50">Example: You pick 2-1 and final is 2-1.</p>
+              </div>
+              <div className="rounded-xl bg-black/[0.03] px-3 py-2">
+                <div className="flex justify-between gap-4"><span>Correct winner or correct draw</span><span className="font-black text-pitch">3 points</span></div>
+                <p className="mt-1 text-xs leading-5 text-ink/50">Example: You pick 2-0 and final is 1-0.</p>
+              </div>
+              <div className="rounded-xl bg-black/[0.03] px-3 py-2">
+                <div className="flex justify-between gap-4"><span>Each team goal predicted correctly</span><span className="font-black text-pitch">1 point per team</span></div>
+                <p className="mt-1 text-xs leading-5 text-ink/50">Example: You pick 2-0 and final is 2-3, you still get 1 point because the first team's goals were correct.</p>
+              </div>
               <div className="flex justify-between gap-4 rounded-xl bg-black/[0.03] px-3 py-2"><span>Wrong prediction</span><span className="font-black text-ink">0 points</span></div>
             </div>
             <div className="mt-4 border-t border-black/[0.06] pt-4 text-sm font-semibold leading-6 text-ink/65">
@@ -546,6 +556,8 @@ export default function Home() {
   );
   const worldCupTeams = data?.favoriteTeamOptions ?? [];
   if (!player) return <Login onLogin={setPlayer} />;
+  const currentLeaderboardIndex = data?.leaderboard.findIndex((row) => row.playerId === player.id) ?? -1;
+  const currentLeaderboardRow = currentLeaderboardIndex >= 0 ? data?.leaderboard[currentLeaderboardIndex] : null;
   const testToolsEnabled =
     player.isAdmin &&
     player.name.trim().toLowerCase() === "admin" &&
@@ -562,6 +574,24 @@ export default function Home() {
         </div>
       </header>
       {error && <div className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
+
+      <section className="mt-5 rounded-2xl bg-white p-4 shadow-card">
+        <p className="text-sm font-extrabold text-ink">Welcome back, {player.name}</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className="rounded-xl bg-black/[0.03] p-3">
+            <p className="text-[0.65rem] font-bold uppercase tracking-wider text-ink/45">Current rank</p>
+            <p className="mt-1 text-xl font-black">{currentLeaderboardIndex >= 0 ? `#${currentLeaderboardIndex + 1}` : "—"}</p>
+          </div>
+          <div className="rounded-xl bg-black/[0.03] p-3">
+            <p className="text-[0.65rem] font-bold uppercase tracking-wider text-ink/45">Points</p>
+            <p className="mt-1 text-xl font-black">{currentLeaderboardRow?.points ?? 0}</p>
+          </div>
+          <div className="rounded-xl bg-black/[0.03] p-3">
+            <p className="text-[0.65rem] font-bold uppercase tracking-wider text-ink/45">Exact scores</p>
+            <p className="mt-1 text-xl font-black">{currentLeaderboardRow?.exactScores ?? 0}</p>
+          </div>
+        </div>
+      </section>
 
       <nav className={`mt-7 grid ${player.isAdmin ? "grid-cols-5" : "grid-cols-4"} rounded-xl bg-black/[0.05] p-1`}>
         <button onClick={() => setTab("picks")} className={`rounded-lg py-2.5 text-sm font-bold ${tab === "picks" ? "bg-white shadow-sm" : "text-ink/55"}`}>{player.isAdmin ? "Results" : "My picks"}</button>
@@ -698,7 +728,7 @@ export default function Home() {
             ))}
             {data && data.leaderboard.length === 0 && <p className="p-8 text-center text-sm text-ink/50">No players yet.</p>}
           </div>
-          <div className="mt-5 rounded-2xl border border-black/[0.06] p-4 text-xs leading-6 text-ink/60"><strong className="text-ink">Scoring:</strong> 3 outcome / 2 exact score / 1 goal difference / 1 each correct team score</div>
+          <div className="mt-5 rounded-2xl border border-black/[0.06] p-4 text-xs leading-6 text-ink/60"><strong className="text-ink">Tie-breakers:</strong> exact scores, then correct outcomes, then goal difference.</div>
         </section>
       ) : tab === "admin" && player.isAdmin ? (
         <section className="mt-6">
