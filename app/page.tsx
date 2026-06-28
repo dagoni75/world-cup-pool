@@ -54,8 +54,8 @@ const TEST_KNOCKOUT_STAGES = [
   },
 ];
 
-function ScoreInput({ value, onChange, disabled, label }: { value: string; onChange: (value: string) => void; disabled?: boolean; label: string }) {
-  return <input aria-label={label} className="h-12 w-14 rounded-xl border border-black/10 bg-white text-center text-lg font-bold outline-none focus:border-pitch focus:ring-2 focus:ring-pitch/15 disabled:bg-black/5" disabled={disabled} inputMode="numeric" min="0" max="30" type="number" value={value} onChange={(event) => onChange(event.target.value)} />;
+function ScoreInput({ value, onChange, disabled, label, max = 30 }: { value: string; onChange: (value: string) => void; disabled?: boolean; label: string; max?: number }) {
+  return <input aria-label={label} className="h-12 w-14 rounded-xl border border-black/10 bg-white text-center text-lg font-bold outline-none focus:border-pitch focus:ring-2 focus:ring-pitch/15 disabled:bg-black/5" disabled={disabled} inputMode="numeric" min="0" max={max} type="number" value={value} onChange={(event) => onChange(event.target.value)} />;
 }
 
 function Login({ onLogin }: { onLogin: (player: Player) => void }) {
@@ -147,6 +147,13 @@ function pointBreakdown(prediction: Prediction, match: Match) {
   return items.length > 0 ? items : [{ label: "No points", points: 0 }];
 }
 
+function penaltyWinner(match: Match) {
+  if (match.teamAPkScore === null || match.teamBPkScore === null) return null;
+  if (match.teamAPkScore > match.teamBPkScore) return match.teamA;
+  if (match.teamBPkScore > match.teamAPkScore) return match.teamB;
+  return null;
+}
+
 function MatchCard({
   match,
   prediction,
@@ -160,14 +167,21 @@ function MatchCard({
   admin: boolean;
   showOfficialResult?: boolean;
   onSavePrediction: (prediction: Prediction) => Promise<void>;
-  onSaveResult: (matchId: string, a: number, b: number) => Promise<void>;
+  onSaveResult: (matchId: string, a: number, b: number, teamAPkScore?: number, teamBPkScore?: number) => Promise<void>;
 }) {
   const [a, setA] = useState(prediction?.teamAScore.toString() ?? "");
   const [b, setB] = useState(prediction?.teamBScore.toString() ?? "");
+  const [teamAPkScore, setTeamAPkScore] = useState(match.teamAPkScore?.toString() ?? "");
+  const [teamBPkScore, setTeamBPkScore] = useState(match.teamBPkScore?.toString() ?? "");
   const [message, setMessage] = useState("");
   const locked = matchDateFromUtc(match.startsAt) <= new Date();
   const completed = match.teamAScore !== null && match.teamBScore !== null;
   const knockout = KNOCKOUT_STAGES.some((option) => option.stage === match.stage);
+  const tiedScore = a !== "" && b !== "" && a === b;
+  const showPenaltyInputs = admin && knockout && tiedScore;
+  const penaltyReady =
+    !showPenaltyInputs ||
+    (teamAPkScore !== "" && teamBPkScore !== "" && teamAPkScore !== teamBPkScore);
   const isPlaceholder =
     !match.teamA ||
     !match.teamB ||
@@ -181,7 +195,7 @@ function MatchCard({
     match.teamAScore === match.teamBScore &&
     match.teamAPkScore !== null &&
     match.teamBPkScore !== null;
-  const canSubmit = a !== "" && b !== "";
+  const canSubmit = a !== "" && b !== "" && penaltyReady;
   const matchTime = formatMatchTime(match.startsAt);
   const pointsEarned =
     !admin && completed && prediction
@@ -193,13 +207,15 @@ function MatchCard({
   useEffect(() => {
     setA((showOfficialResult || admin) && match.teamAScore !== null ? String(match.teamAScore) : prediction?.teamAScore.toString() ?? "");
     setB((showOfficialResult || admin) && match.teamBScore !== null ? String(match.teamBScore) : prediction?.teamBScore.toString() ?? "");
-  }, [prediction, admin, showOfficialResult, match.teamAScore, match.teamBScore]);
+    setTeamAPkScore(match.teamAPkScore !== null ? String(match.teamAPkScore) : "");
+    setTeamBPkScore(match.teamBPkScore !== null ? String(match.teamBPkScore) : "");
+  }, [prediction, admin, showOfficialResult, match.teamAScore, match.teamBScore, match.teamAPkScore, match.teamBPkScore]);
 
   async function submit() {
     if (!canSubmit) return;
     setMessage("Saving...");
     try {
-      if (admin) await onSaveResult(match.id, Number(a), Number(b));
+      if (admin) await onSaveResult(match.id, Number(a), Number(b), showPenaltyInputs ? Number(teamAPkScore) : undefined, showPenaltyInputs ? Number(teamBPkScore) : undefined);
       else await onSavePrediction({ matchId: match.id, teamAScore: Number(a), teamBScore: Number(b) });
       setMessage("Saved"); setTimeout(() => setMessage(""), 1600);
     } catch (err) { setMessage(err instanceof Error ? err.message : "Could not save."); }
@@ -223,10 +239,21 @@ function MatchCard({
         )}
         <div className="font-extrabold leading-tight">{match.teamB}</div>
       </div>
+      {showPenaltyInputs && (
+        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-xl bg-black/[0.03] px-3 py-3">
+          <div className="text-right text-xs font-black uppercase tracking-[0.16em] text-ink/45">PK</div>
+          <div className="flex items-center gap-2">
+            <ScoreInput label={`${match.teamA} penalty kicks`} value={teamAPkScore} onChange={setTeamAPkScore} max={20} />
+            <span className="font-bold text-ink/30">:</span>
+            <ScoreInput label={`${match.teamB} penalty kicks`} value={teamBPkScore} onChange={setTeamBPkScore} max={20} />
+          </div>
+          <div className="text-xs font-semibold text-ink/45">No ties</div>
+        </div>
+      )}
       {hasPenaltyResult && (
         <div className="mt-3 rounded-xl bg-black/[0.03] px-3 py-2 text-center text-xs font-bold text-ink/55">
-          <div>{match.teamA} {match.teamAScore} - {match.teamBScore} {match.teamB}</div>
-          <div className="mt-1 text-pitch">PK: {match.teamAPkScore} - {match.teamBPkScore}</div>
+          <div>{match.teamA} {match.teamAScore}-{match.teamBScore} {match.teamB}</div>
+          <div className="mt-1 text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore}-{match.teamBPkScore} on penalties</div>
         </div>
       )}
       {showUserResultSummary && (
@@ -270,7 +297,7 @@ function MatchCard({
         <span className={`max-w-[65%] text-xs font-semibold ${message && message !== "Saved" && message !== "Saving..." ? "text-red-700" : "text-pitch"}`}>
           {message || (
             showOfficialResult ? (
-              completed ? `Final: ${match.teamAScore} - ${match.teamBScore}` : "Awaiting result"
+              completed ? `Final: ${match.teamAScore} - ${match.teamBScore}${hasPenaltyResult ? `, ${penaltyWinner(match)} wins ${match.teamAPkScore}-${match.teamBPkScore} on penalties` : ""}` : "Awaiting result"
             ) : !admin ? (
               <span className="flex flex-col gap-0.5">
                 {!completed && prediction && <span>{`Your pick: ${prediction.teamAScore} - ${prediction.teamBScore}`}</span>}
@@ -280,6 +307,9 @@ function MatchCard({
         </span>
         {!isPlaceholder && !showOfficialResult && (!locked || admin) && <button onClick={submit} disabled={!canSubmit} className="rounded-lg bg-ink px-4 py-2 text-xs font-bold text-white disabled:opacity-30">{admin ? "Set final" : "Save pick"}</button>}
       </div>
+      {showPenaltyInputs && teamAPkScore === teamBPkScore && teamAPkScore !== "" && (
+        <p className="mt-2 text-xs font-semibold text-red-700">Penalty scores cannot be tied.</p>
+      )}
     </article>
   );
 }
@@ -358,8 +388,8 @@ export default function Home() {
 
   async function refresh(current = player) { if (!current) return; try { setData(await loadPool(current)); setError(""); } catch (err) { setError(err instanceof Error ? err.message : "Could not load the pool."); } }
   async function updatePrediction(prediction: Prediction) { if (!player) return; await savePrediction(player, prediction); await refresh(); }
-  async function saveFinalResult(matchId: string, a: number, b: number) { if (!player) return; await saveResult(player, matchId, a, b); }
-  async function updateResult(matchId: string, a: number, b: number) { await saveFinalResult(matchId, a, b); await refresh(); }
+  async function saveFinalResult(matchId: string, a: number, b: number, teamAPkScore?: number, teamBPkScore?: number) { if (!player) return; await saveResult(player, matchId, a, b, teamAPkScore, teamBPkScore); }
+  async function updateResult(matchId: string, a: number, b: number, teamAPkScore?: number, teamBPkScore?: number) { await saveFinalResult(matchId, a, b, teamAPkScore, teamBPkScore); await refresh(); }
   async function saveTestGroupResults() {
     if (!player) return 0;
     const pool = await loadPool(player);
