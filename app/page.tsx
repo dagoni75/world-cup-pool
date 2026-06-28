@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { changePin, importOfficialScoresSoFar, loadPool, login, resetTestResults, saveFavoriteTeam, savePrediction, saveResult } from "@/lib/api";
 import { predictionPoints } from "@/lib/scoring";
+import { formatMatchTime, matchDateFromUtc } from "@/lib/time";
 import { Match, Player, PoolData, Prediction } from "@/lib/types";
 
 const SESSION_KEY = "kickoff-pool-player";
@@ -164,7 +165,7 @@ function MatchCard({
   const [a, setA] = useState(prediction?.teamAScore.toString() ?? "");
   const [b, setB] = useState(prediction?.teamBScore.toString() ?? "");
   const [message, setMessage] = useState("");
-  const locked = new Date(match.startsAt) <= new Date();
+  const locked = matchDateFromUtc(match.startsAt) <= new Date();
   const completed = match.teamAScore !== null && match.teamBScore !== null;
   const knockout = KNOCKOUT_STAGES.some((option) => option.stage === match.stage);
   const isPlaceholder =
@@ -181,12 +182,7 @@ function MatchCard({
     match.teamAPkScore !== null &&
     match.teamBPkScore !== null;
   const canSubmit = a !== "" && b !== "";
-  const matchTime = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(match.startsAt));
+  const matchTime = formatMatchTime(match.startsAt);
   const pointsEarned =
     !admin && completed && prediction
       ? predictionPoints(prediction.teamAScore, prediction.teamBScore, match.teamAScore!, match.teamBScore!)

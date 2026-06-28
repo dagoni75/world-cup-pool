@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { generateFullTestTournament, saveResult } from "@/lib/api";
+import { formatMatchTime } from "@/lib/time";
 import { Player } from "@/lib/types";
 
 const SESSION_KEY = "kickoff-pool-player";
@@ -156,12 +157,7 @@ function AdminMatchRow({
       <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-ink/45">
         <span>{match.stage}</span>
         <span>
-          {new Intl.DateTimeFormat(undefined, {
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-          }).format(new Date(match.starts_at))}
+          {formatMatchTime(match.starts_at)}
         </span>
       </div>
       <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
