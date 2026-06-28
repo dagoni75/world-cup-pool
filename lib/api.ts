@@ -74,6 +74,24 @@ const KNOCKOUT_SLOT_COUNTS = [
   { stage: "Final", prefix: "FINAL", count: 1 },
 ];
 const KNOCKOUT_EXPECTED_SCORES = new Map(KNOCKOUT_SLOT_COUNTS.map((item) => [item.stage, item.count]));
+const ROUND_OF_32_STARTS_AT = [
+  "2026-06-28T19:00:00+00:00", // Match 73, Inglewood, 12:00 UTC-7
+  "2026-06-29T20:30:00+00:00", // Match 74, Foxborough, 16:30 UTC-4
+  "2026-06-30T01:00:00+00:00", // Match 75, Guadalupe, 19:00 UTC-6
+  "2026-06-29T17:00:00+00:00", // Match 76, Houston, 12:00 UTC-5
+  "2026-06-30T21:00:00+00:00", // Match 77, East Rutherford, 17:00 UTC-4
+  "2026-06-30T17:00:00+00:00", // Match 78, Arlington, 12:00 UTC-5
+  "2026-07-01T01:00:00+00:00", // Match 79, Mexico City, 19:00 UTC-6
+  "2026-07-01T16:00:00+00:00", // Match 80, Atlanta, 12:00 UTC-4
+  "2026-07-02T00:00:00+00:00", // Match 81, Santa Clara, 17:00 UTC-7
+  "2026-07-01T20:00:00+00:00", // Match 82, Seattle, 13:00 UTC-7
+  "2026-07-02T23:00:00+00:00", // Match 83, Toronto, 19:00 UTC-4
+  "2026-07-02T19:00:00+00:00", // Match 84, Inglewood, 12:00 UTC-7
+  "2026-07-03T03:00:00+00:00", // Match 85, Vancouver, 20:00 UTC-7
+  "2026-07-03T22:00:00+00:00", // Match 86, Miami Gardens, 18:00 UTC-4
+  "2026-07-04T01:30:00+00:00", // Match 87, Kansas City, 20:30 UTC-5
+  "2026-07-03T18:00:00+00:00", // Match 88, Arlington, 13:00 UTC-5
+] as const;
 const FIFA_THIRD_PLACE_SLOT_ORDER = ["A", "B", "D", "E", "G", "I", "K", "L"] as const;
 const FIFA_THIRD_PLACE_ASSIGNMENTS: Record<string, string> = {
   "EFGHIJKL": "EJIFHGLK",
@@ -771,6 +789,10 @@ function addHours(date: Date, hours: number) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000).toISOString();
 }
 
+function knockoutStartsAt(stage: string, index: number, fallback: string) {
+  return stage === "Round of 32" ? ROUND_OF_32_STARTS_AT[index] ?? fallback : fallback;
+}
+
 function sortStandings(a: TeamStanding, b: TeamStanding) {
   return (
     b.points - a.points ||
@@ -950,7 +972,7 @@ function buildKnockoutPlan(matchRows: MatchRow[]) {
     round.teams.map(([teamA, teamB], index) => ({
       team_a: teamA,
       team_b: avoidSameTeam(teamA, teamB, "TBD"),
-      starts_at: addHours(base, round.offsetDays * 24 + index * 3),
+      starts_at: knockoutStartsAt(round.stage, index, addHours(base, round.offsetDays * 24 + index * 3)),
       stage: round.stage,
       bracket_slot: bracketSlot(round.stage, index),
     })),
