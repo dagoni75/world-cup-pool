@@ -177,11 +177,6 @@ function MatchCard({
   const locked = matchDateFromUtc(match.startsAt) <= new Date();
   const completed = match.teamAScore !== null && match.teamBScore !== null;
   const knockout = KNOCKOUT_STAGES.some((option) => option.stage === match.stage);
-  const tiedScore = a !== "" && b !== "" && a === b;
-  const showPenaltyInputs = admin && knockout && tiedScore;
-  const penaltyReady =
-    !showPenaltyInputs ||
-    (teamAPkScore !== "" && teamBPkScore !== "" && teamAPkScore !== teamBPkScore);
   const isPlaceholder =
     !match.teamA ||
     !match.teamB ||
@@ -189,6 +184,13 @@ function MatchCard({
     match.teamB === "TBD" ||
     match.teamA.startsWith("Winner") ||
     match.teamB.startsWith("Winner");
+  const tiedScore = a !== "" && b !== "" && a === b;
+  const showPenaltyInputs = admin && knockout && !isPlaceholder;
+  const penaltyReady =
+    !admin ||
+    !knockout ||
+    !tiedScore ||
+    (teamAPkScore !== "" && teamBPkScore !== "" && teamAPkScore !== teamBPkScore);
   const hasPenaltyResult =
     knockout &&
     completed &&
@@ -215,7 +217,7 @@ function MatchCard({
     if (!canSubmit) return;
     setMessage("Saving...");
     try {
-      if (admin) await onSaveResult(match.id, Number(a), Number(b), showPenaltyInputs ? Number(teamAPkScore) : undefined, showPenaltyInputs ? Number(teamBPkScore) : undefined);
+      if (admin) await onSaveResult(match.id, Number(a), Number(b), tiedScore ? Number(teamAPkScore) : undefined, tiedScore ? Number(teamBPkScore) : undefined);
       else await onSavePrediction({ matchId: match.id, teamAScore: Number(a), teamBScore: Number(b) });
       setMessage("Saved"); setTimeout(() => setMessage(""), 1600);
     } catch (err) { setMessage(err instanceof Error ? err.message : "Could not save."); }
@@ -247,13 +249,13 @@ function MatchCard({
             <span className="font-bold text-ink/30">:</span>
             <ScoreInput label={`${match.teamB} penalty kicks`} value={teamBPkScore} onChange={setTeamBPkScore} max={20} />
           </div>
-          <div className="text-xs font-semibold text-ink/45">No ties</div>
+          <div className="text-xs font-semibold text-ink/45">Penalties</div>
         </div>
       )}
       {hasPenaltyResult && (
         <div className="mt-3 rounded-xl bg-black/[0.03] px-3 py-2 text-center text-xs font-bold text-ink/55">
-          <div>{match.teamA} {match.teamAScore}-{match.teamBScore} {match.teamB}</div>
-          <div className="mt-1 text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore}-{match.teamBPkScore} on penalties</div>
+          <div>{match.teamA} {match.teamAScore} - {match.teamBScore} {match.teamB}</div>
+          <div className="mt-1 text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore} on penalties</div>
         </div>
       )}
       {showUserResultSummary && (
@@ -269,6 +271,7 @@ function MatchCard({
               <div className={prediction ? "mt-2" : ""}>
                 <div className="text-ink/45">Actual result:</div>
                 <div className="text-ink">{match.teamAScore} - {match.teamBScore}</div>
+                {hasPenaltyResult && <div className="text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore} on penalties</div>}
               </div>
               {prediction && (
                 <div className="mt-3 border-t border-black/[0.06] pt-2">
@@ -297,7 +300,7 @@ function MatchCard({
         <span className={`max-w-[65%] text-xs font-semibold ${message && message !== "Saved" && message !== "Saving..." ? "text-red-700" : "text-pitch"}`}>
           {message || (
             showOfficialResult ? (
-              completed ? `Final: ${match.teamAScore} - ${match.teamBScore}${hasPenaltyResult ? `, ${penaltyWinner(match)} wins ${match.teamAPkScore}-${match.teamBPkScore} on penalties` : ""}` : "Awaiting result"
+              completed ? `Final: ${match.teamAScore} - ${match.teamBScore}${hasPenaltyResult ? `, ${penaltyWinner(match)} wins ${match.teamAPkScore} - ${match.teamBPkScore} on penalties` : ""}` : "Awaiting result"
             ) : !admin ? (
               <span className="flex flex-col gap-0.5">
                 {!completed && prediction && <span>{`Your pick: ${prediction.teamAScore} - ${prediction.teamBScore}`}</span>}
@@ -307,8 +310,8 @@ function MatchCard({
         </span>
         {!isPlaceholder && !showOfficialResult && (!locked || admin) && <button onClick={submit} disabled={!canSubmit} className="rounded-lg bg-ink px-4 py-2 text-xs font-bold text-white disabled:opacity-30">{admin ? "Set final" : "Save pick"}</button>}
       </div>
-      {showPenaltyInputs && teamAPkScore === teamBPkScore && teamAPkScore !== "" && (
-        <p className="mt-2 text-xs font-semibold text-red-700">Penalty scores cannot be tied.</p>
+      {showPenaltyInputs && tiedScore && teamAPkScore === teamBPkScore && teamAPkScore !== "" && (
+        <p className="mt-2 text-xs font-semibold text-red-700">Knockout match needs a winner.</p>
       )}
     </article>
   );

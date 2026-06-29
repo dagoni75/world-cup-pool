@@ -1446,13 +1446,13 @@ export async function saveResult(
 
   if (knockout && tied) {
     if (teamAPkScore === undefined || teamBPkScore === undefined) {
-      throw new Error("Penalty scores are required for tied knockout matches.");
+      throw new Error("Knockout match needs a winner.");
     }
     if (!validPkScore(teamAPkScore) || !validPkScore(teamBPkScore)) {
       throw new Error("Penalty scores must be between 0 and 20.");
     }
     if (teamAPkScore === teamBPkScore) {
-      throw new Error("Penalty scores cannot be tied.");
+      throw new Error("Knockout match needs a winner.");
     }
 
     penaltyScores = { team_a_pk_score: teamAPkScore, team_b_pk_score: teamBPkScore };

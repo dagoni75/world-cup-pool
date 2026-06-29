@@ -89,9 +89,10 @@ function AdminMatchRow({
   const [message, setMessage] = useState("");
   const knockout = KNOCKOUT_STAGES.has(match.stage);
   const tied = teamAScore !== "" && teamAScore === teamBScore;
-  const showPenaltyInputs = knockout && tied;
+  const showPenaltyInputs = knockout;
   const penaltyReady =
-    !showPenaltyInputs ||
+    !knockout ||
+    !tied ||
     (teamAPkScore !== "" && teamBPkScore !== "" && teamAPkScore !== teamBPkScore);
   const canSave = teamAScore !== "" && teamBScore !== "" && penaltyReady;
 
@@ -141,8 +142,8 @@ function AdminMatchRow({
         match.id,
         Number(teamAScore),
         Number(teamBScore),
-        showPenaltyInputs ? Number(teamAPkScore) : undefined,
-        showPenaltyInputs ? Number(teamBPkScore) : undefined,
+        tied ? Number(teamAPkScore) : undefined,
+        tied ? Number(teamBPkScore) : undefined,
       );
       setDirty(false);
       setMessage("Saved");
@@ -197,7 +198,7 @@ function AdminMatchRow({
               onChange={updateTeamBPkScore}
             />
           </div>
-          <div className="text-xs font-semibold text-ink/45">No ties</div>
+          <div className="text-xs font-semibold text-ink/45">Penalties</div>
         </div>
       )}
       <div className="mt-4 flex min-h-9 items-center justify-between border-t border-black/[0.06] pt-3">
@@ -209,8 +210,8 @@ function AdminMatchRow({
           }`}
         >
           {message ||
-            (showPenaltyInputs && teamAPkScore === teamBPkScore && teamAPkScore !== ""
-              ? "Penalty scores cannot be tied."
+            (showPenaltyInputs && tied && teamAPkScore === teamBPkScore && teamAPkScore !== ""
+              ? "Knockout match needs a winner."
               : "")}
         </span>
         <button
