@@ -12,7 +12,14 @@ export type Match = {
   teamBPkScore: number | null;
 };
 
-export type Prediction = { matchId: string; teamAScore: number; teamBScore: number };
+export type AdvancingTeam = "team_a" | "team_b";
+
+export type Prediction = {
+  matchId: string;
+  teamAScore: number;
+  teamBScore: number;
+  advancingTeam: AdvancingTeam | null;
+};
 
 export type LeaderboardRow = {
   playerId: string;

@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { FAVORITE_TEAM_OPTIONS } from "./favorite-teams";
 import { predictionPoints } from "./scoring";
-import { Match, Player, PoolData, Prediction } from "./types";
+import { AdvancingTeam, Match, Player, PoolData, Prediction } from "./types";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -51,6 +51,14 @@ type OfficialResult = {
   teamB: string;
   teamAScore: number;
   teamBScore: number;
+};
+
+type PredictionRow = {
+  player_id: string;
+  match_id: string;
+  team_a_score: number;
+  team_b_score: number;
+  predicted_advancer: AdvancingTeam | null;
 };
 
 const KNOCKOUT_STAGES = [
@@ -785,6 +793,12 @@ function knockoutLoser(match?: MatchRow) {
   return null;
 }
 
+function predictedAdvancerLabel(prediction: Pick<PredictionRow, "predicted_advancer">, match: MatchRow) {
+  if (prediction.predicted_advancer === "team_a") return match.team_a;
+  if (prediction.predicted_advancer === "team_b") return match.team_b;
+  return null;
+}
+
 function addHours(date: Date, hours: number) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000).toISOString();
 }
@@ -1188,10 +1202,10 @@ export async function loadPool(player: Player): Promise<PoolData> {
   const [myPredictionsResult, playersResult, allPredictionsResult] = await Promise.all([
     supabase
       .from("predictions")
-      .select("match_id, team_a_score, team_b_score")
+      .select("match_id, team_a_score, team_b_score, predicted_advancer")
       .eq("player_id", player.id),
     supabase.from("players").select("id, name, is_admin, favorite_team"),
-    supabase.from("predictions").select("player_id, match_id, team_a_score, team_b_score"),
+    supabase.from("predictions").select("player_id, match_id, team_a_score, team_b_score, predicted_advancer"),
   ]);
 
   const matches = matchRows.map((row): Match => ({
@@ -1211,6 +1225,7 @@ export async function loadPool(player: Player): Promise<PoolData> {
       matchId: row.match_id,
       teamAScore: row.team_a_score,
       teamBScore: row.team_b_score,
+      advancingTeam: row.predicted_advancer,
     }),
   );
 
@@ -1219,7 +1234,7 @@ export async function loadPool(player: Player): Promise<PoolData> {
       .filter((match) => completed(match) && played(match))
       .map((match) => [match.id, match]),
   );
-  const allPredictions = unwrap(allPredictionsResult.data, allPredictionsResult.error);
+  const allPredictions = unwrap(allPredictionsResult.data, allPredictionsResult.error) as PredictionRow[];
   const players = unwrap(playersResult.data, playersResult.error);
   const leaderboard = players
     .filter((item) => !item.is_admin)
@@ -1329,7 +1344,7 @@ export async function loadPool(player: Player): Promise<PoolData> {
       recentMatches.push({
         matchId: match.id,
         label: `${match.team_a} vs ${match.team_b}`,
-        pick: `${prediction.team_a_score} - ${prediction.team_b_score}`,
+        pick: `${prediction.team_a_score} - ${prediction.team_b_score}${predictedAdvancerLabel(prediction, match) ? `, ${predictedAdvancerLabel(prediction, match)} advances` : ""}`,
         actual: `${actualTeamAScore} - ${actualTeamBScore}`,
         points: matchPoints,
         startsAt: match.starts_at,
@@ -1393,7 +1408,7 @@ export async function savePrediction(player: Player, prediction: Prediction) {
 
   const { data: match, error: matchError } = await supabase
     .from("matches")
-    .select("starts_at")
+    .select("starts_at, stage")
     .eq("id", prediction.matchId)
     .maybeSingle();
 
@@ -1402,6 +1417,11 @@ export async function savePrediction(player: Player, prediction: Prediction) {
   if (new Date(match.starts_at) <= new Date()) {
     throw new Error("This match has started. Predictions are locked.");
   }
+  const predictedDraw = prediction.teamAScore === prediction.teamBScore;
+  const predictedAdvancer = KNOCKOUT_STAGE_SET.has(match.stage) && predictedDraw ? prediction.advancingTeam : null;
+  if (KNOCKOUT_STAGE_SET.has(match.stage) && predictedDraw && !predictedAdvancer) {
+    throw new Error("Choose who advances.");
+  }
 
   const { error } = await supabase.rpc("app_save_prediction", {
     p_player_id: player.id,
@@ -1409,6 +1429,7 @@ export async function savePrediction(player: Player, prediction: Prediction) {
     p_match_id: prediction.matchId,
     p_team_a_score: prediction.teamAScore,
     p_team_b_score: prediction.teamBScore,
+    p_predicted_advancer: predictedAdvancer,
   });
 
   if (error) throw new Error(error.message);

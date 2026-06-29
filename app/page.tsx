@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { changePin, importOfficialScoresSoFar, loadPool, login, resetTestResults, saveFavoriteTeam, savePrediction, saveResult } from "@/lib/api";
 import { predictionPoints } from "@/lib/scoring";
 import { formatMatchTime, matchDateFromUtc } from "@/lib/time";
-import { Match, Player, PoolData, Prediction } from "@/lib/types";
+import { AdvancingTeam, Match, Player, PoolData, Prediction } from "@/lib/types";
 
 const SESSION_KEY = "kickoff-pool-player";
 const LEADERBOARD_RANKS_KEY = "kickoff-pool-leaderboard-ranks";
@@ -173,6 +173,7 @@ function MatchCard({
   const [b, setB] = useState(prediction?.teamBScore.toString() ?? "");
   const [teamAPkScore, setTeamAPkScore] = useState(match.teamAPkScore?.toString() ?? "");
   const [teamBPkScore, setTeamBPkScore] = useState(match.teamBPkScore?.toString() ?? "");
+  const [advancingTeam, setAdvancingTeam] = useState<AdvancingTeam | null>(prediction?.advancingTeam ?? null);
   const [message, setMessage] = useState("");
   const locked = matchDateFromUtc(match.startsAt) <= new Date();
   const completed = match.teamAScore !== null && match.teamBScore !== null;
@@ -186,6 +187,7 @@ function MatchCard({
     match.teamB.startsWith("Winner");
   const tiedScore = a !== "" && b !== "" && a === b;
   const showPenaltyInputs = admin && knockout && !isPlaceholder;
+  const showAdvancerInputs = !admin && knockout && tiedScore && !isPlaceholder;
   const penaltyReady =
     !admin ||
     !knockout ||
@@ -197,7 +199,7 @@ function MatchCard({
     match.teamAScore === match.teamBScore &&
     match.teamAPkScore !== null &&
     match.teamBPkScore !== null;
-  const canSubmit = a !== "" && b !== "" && penaltyReady;
+  const canSubmit = a !== "" && b !== "" && penaltyReady && (!showAdvancerInputs || advancingTeam !== null);
   const matchTime = formatMatchTime(match.startsAt);
   const pointsEarned =
     !admin && completed && prediction
@@ -211,6 +213,7 @@ function MatchCard({
     setB((showOfficialResult || admin) && match.teamBScore !== null ? String(match.teamBScore) : prediction?.teamBScore.toString() ?? "");
     setTeamAPkScore(match.teamAPkScore !== null ? String(match.teamAPkScore) : "");
     setTeamBPkScore(match.teamBPkScore !== null ? String(match.teamBPkScore) : "");
+    setAdvancingTeam(prediction?.advancingTeam ?? null);
   }, [prediction, admin, showOfficialResult, match.teamAScore, match.teamBScore, match.teamAPkScore, match.teamBPkScore]);
 
   async function submit() {
@@ -218,7 +221,7 @@ function MatchCard({
     setMessage("Saving...");
     try {
       if (admin) await onSaveResult(match.id, Number(a), Number(b), tiedScore ? Number(teamAPkScore) : undefined, tiedScore ? Number(teamBPkScore) : undefined);
-      else await onSavePrediction({ matchId: match.id, teamAScore: Number(a), teamBScore: Number(b) });
+      else await onSavePrediction({ matchId: match.id, teamAScore: Number(a), teamBScore: Number(b), advancingTeam: showAdvancerInputs ? advancingTeam : null });
       setMessage("Saved"); setTimeout(() => setMessage(""), 1600);
     } catch (err) { setMessage(err instanceof Error ? err.message : "Could not save."); }
   }
@@ -252,6 +255,29 @@ function MatchCard({
           <div className="text-xs font-semibold text-ink/45">Penalties</div>
         </div>
       )}
+      {showAdvancerInputs && (
+        <div className="mt-3 rounded-xl bg-black/[0.03] px-3 py-3">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-ink/45">Who Advances?</div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {[
+              { value: "team_a" as const, label: match.teamA },
+              { value: "team_b" as const, label: match.teamB },
+            ].map((option) => (
+              <label key={option.value} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm font-bold transition ${advancingTeam === option.value ? "border-pitch bg-lime/40 text-pitch" : "border-black/10 bg-white text-ink/70 hover:bg-black/[0.02]"}`}>
+                <input
+                  checked={advancingTeam === option.value}
+                  className="h-4 w-4 accent-pitch"
+                  name={`advances-${match.id}`}
+                  type="radio"
+                  value={option.value}
+                  onChange={() => setAdvancingTeam(option.value)}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       {hasPenaltyResult && (
         <div className="mt-3 rounded-xl bg-black/[0.03] px-3 py-2 text-center text-xs font-bold text-ink/55">
           <div>{match.teamA} {match.teamAScore} - {match.teamBScore} {match.teamB}</div>
@@ -266,6 +292,9 @@ function MatchCard({
                 <div>
                   <div className="text-ink/45">Your pick:</div>
                   <div className="text-ink">{prediction.teamAScore} - {prediction.teamBScore}</div>
+                  {prediction.advancingTeam && prediction.teamAScore === prediction.teamBScore && (
+                    <div className="text-ink">{prediction.advancingTeam === "team_a" ? match.teamA : match.teamB} advances</div>
+                  )}
                 </div>
               )}
               <div className={prediction ? "mt-2" : ""}>
@@ -304,6 +333,9 @@ function MatchCard({
             ) : !admin ? (
               <span className="flex flex-col gap-0.5">
                 {!completed && prediction && <span>{`Your pick: ${prediction.teamAScore} - ${prediction.teamBScore}`}</span>}
+                {!completed && prediction?.advancingTeam && prediction.teamAScore === prediction.teamBScore && (
+                  <span>{`Advances: ${prediction.advancingTeam === "team_a" ? match.teamA : match.teamB}`}</span>
+                )}
               </span>
             ) : ""
           )}
