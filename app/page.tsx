@@ -722,7 +722,7 @@ export default function Home() {
                   <div className="rounded-2xl bg-white p-6 text-center text-sm text-ink/55 shadow-card">No matches in this stage yet.</div>
                 ) : (
                   selectedBracketMatches.map((match) => (
-                    <MatchCard key={match.id} match={match} prediction={predictionMap.get(match.id)} admin={false} onSavePrediction={updatePrediction} onSaveResult={updateResult} />
+                    <MatchCard key={match.id} match={match} prediction={predictionMap.get(match.id)} admin={player.isAdmin} onSavePrediction={updatePrediction} onSaveResult={updateResult} />
                   ))
                 )}
               </div>
