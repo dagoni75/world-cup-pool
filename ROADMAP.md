@@ -1,3 +1,16 @@
+# 🚀 Current Sprint
+
+> Current focus. Finish these before starting new features.
+
+- [ ] Auto-scroll to today's match
+- [ ] Maintenance mode
+- [ ] Leaderboard redesign
+- [ ] Dark mode
+- [ ] Create develop branch
+
+---
+
+# 🗺️ Project Roadmap
 # World Cup Pool Roadmap
 
 ## Current Version: V1.0 Beta
