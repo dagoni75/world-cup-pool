@@ -1,14 +1,26 @@
-# 🚀 Current Sprint
+# 🏆 World Cup Pool Roadmap
 
-> Current focus. Finish these before starting new features.
+## 📌 Vision
 
+Build a simple, fun sports prediction platform — the UNO of sports pools.
+
+Players predict scores, compete with friends, follow live standings, and build a prediction history across tournaments and seasons.
+
+---
+
+## 🚀 Current Sprint
+
+Current focus: improve stability, polish, and workflow.
+
+- [ ] Create develop branch
 - [ ] Auto-scroll to today's match
 - [ ] Maintenance mode
 - [ ] Leaderboard redesign
 - [ ] Dark mode
-- [ ] Create develop branch
 
 ---
+
+## ✅ Completed Features
 
 # 🗺️ Project Roadmap
 # World Cup Pool Roadmap
