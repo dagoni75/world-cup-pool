@@ -131,22 +131,35 @@ function pointBreakdown(prediction: Prediction, match: Match) {
   const items: { label: string; points: number }[] = [];
 
   if (Math.sign(predictedGoalDifference) === Math.sign(actualGoalDifference)) {
-    items.push({ label: "Correct outcome", points: 3 });
+    items.push({ label: "🏆 Correct outcome", points: 3 });
   }
   if (prediction.teamAScore === match.teamAScore && prediction.teamBScore === match.teamBScore) {
-    items.push({ label: "Exact score bonus", points: 2 });
+    items.push({ label: "🎯 Exact score", points: 2 });
   }
   if (predictedGoalDifference === actualGoalDifference) {
-    items.push({ label: "Goal difference", points: 1 });
+    items.push({ label: "📐 Correct margin", points: 1 });
   }
   if (prediction.teamAScore === match.teamAScore) {
-    items.push({ label: `${match.teamA} goals`, points: 1 });
+    items.push({ label: `⚽ ${match.teamA} score`, points: 1 });
   }
   if (prediction.teamBScore === match.teamBScore) {
-    items.push({ label: `${match.teamB} goals`, points: 1 });
+    items.push({ label: `⚽ ${match.teamB} score`, points: 1 });
   }
 
   return items.length > 0 ? items : [{ label: "No points", points: 0 }];
+}
+
+function scoringSummaryLabel(prediction: Prediction, match: Match) {
+  if (match.teamAScore === null || match.teamBScore === null) return null;
+
+  const predictedGoalDifference = prediction.teamAScore - prediction.teamBScore;
+  const actualGoalDifference = match.teamAScore - match.teamBScore;
+
+  if (prediction.teamAScore === match.teamAScore && prediction.teamBScore === match.teamBScore) return "🎯 Exact score";
+  if (Math.sign(predictedGoalDifference) === Math.sign(actualGoalDifference)) return "🏆 Correct outcome";
+  if (predictedGoalDifference === actualGoalDifference) return "📐 Correct margin";
+  if (prediction.teamAScore === match.teamAScore || prediction.teamBScore === match.teamBScore) return "⚽ Team score";
+  return "No points";
 }
 
 function penaltyWinner(match: Match) {
@@ -177,6 +190,7 @@ function MatchCard({
   const [teamBPkScore, setTeamBPkScore] = useState(match.teamBPkScore?.toString() ?? "");
   const [advancingTeam, setAdvancingTeam] = useState<AdvancingTeam | null>(prediction?.advancingTeam ?? null);
   const [message, setMessage] = useState("");
+  const [scoringDetailsOpen, setScoringDetailsOpen] = useState(false);
   const locked = matchDateFromUtc(match.startsAt) <= new Date();
   const completed = match.teamAScore !== null && match.teamBScore !== null;
   const knockout = KNOCKOUT_STAGES.some((option) => option.stage === match.stage);
@@ -208,6 +222,7 @@ function MatchCard({
       ? predictionPoints(prediction.teamAScore, prediction.teamBScore, match.teamAScore!, match.teamBScore!)
       : null;
   const pointsBreakdown = completed && prediction ? pointBreakdown(prediction, match) : [];
+  const summaryLabel = completed && prediction ? scoringSummaryLabel(prediction, match) : null;
   const showUserResultSummary = !admin && !showOfficialResult && (completed || (locked && !completed));
 
   useEffect(() => {
@@ -216,6 +231,7 @@ function MatchCard({
     setTeamAPkScore(match.teamAPkScore !== null ? String(match.teamAPkScore) : "");
     setTeamBPkScore(match.teamBPkScore !== null ? String(match.teamBPkScore) : "");
     setAdvancingTeam(prediction?.advancingTeam ?? null);
+    setScoringDetailsOpen(false);
   }, [prediction, admin, showOfficialResult, match.teamAScore, match.teamBScore, match.teamAPkScore, match.teamBPkScore]);
 
   async function submit() {
@@ -291,34 +307,61 @@ function MatchCard({
           {completed ? (
             <>
               {prediction && (
-                <div>
-                  <div className="text-ink/45">Your pick:</div>
-                  <div className="text-ink">{prediction.teamAScore} - {prediction.teamBScore}</div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <div className="text-ink/45">Your pick</div>
+                    <div className="mt-0.5 text-sm font-black text-ink">{prediction.teamAScore} - {prediction.teamBScore}</div>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <div className="text-ink/45">Actual result</div>
+                    <div className="mt-0.5 text-sm font-black text-ink">{match.teamAScore} - {match.teamBScore}</div>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <div className="text-ink/45">Points earned</div>
+                    <div className="mt-0.5 text-sm font-black text-pitch">{pointsEarned} {pointsEarned === 1 ? "point" : "points"}</div>
+                  </div>
                   {prediction.advancingTeam && prediction.teamAScore === prediction.teamBScore && (
-                    <div className="text-ink">{prediction.advancingTeam === "team_a" ? match.teamA : match.teamB} advances</div>
+                    <div className="rounded-xl bg-white px-3 py-2 sm:col-span-3">
+                      <div className="text-ink/45">Advances</div>
+                      <div className="mt-0.5 text-sm font-black text-ink">{prediction.advancingTeam === "team_a" ? match.teamA : match.teamB}</div>
+                    </div>
                   )}
                 </div>
               )}
-              <div className={prediction ? "mt-2" : ""}>
-                <div className="text-ink/45">Actual result:</div>
-                <div className="text-ink">{match.teamAScore} - {match.teamBScore}</div>
-                {hasPenaltyResult && <div className="text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore} on penalties</div>}
-              </div>
+              {!prediction && (
+                <div>
+                  <div className="text-ink/45">Actual result</div>
+                  <div className="text-ink">{match.teamAScore} - {match.teamBScore}</div>
+                </div>
+              )}
+              {hasPenaltyResult && <div className="mt-2 rounded-xl bg-white px-3 py-2 text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore} on penalties</div>}
               {prediction && (
-                <div className="mt-3 border-t border-black/[0.06] pt-2">
-                  <div className="text-ink/45">Points earned:</div>
-                  <div className="mt-1 space-y-1">
-                    {pointsBreakdown.map((item) => (
-                      <div key={item.label} className="flex justify-between gap-3">
-                        <span>{item.label}</span>
-                        <span className="shrink-0 text-pitch">+{item.points}</span>
+                <div className="mt-3 border-t border-black/[0.06] pt-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className={`rounded-full px-3 py-1 font-black ${pointsEarned === 0 ? "bg-black/[0.05] text-ink/55" : "bg-lime text-pitch"}`}>{summaryLabel}</span>
+                    <button
+                      type="button"
+                      onClick={() => setScoringDetailsOpen((open) => !open)}
+                      className="min-h-10 rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-ink transition hover:bg-black/[0.03] focus:outline-none focus:ring-2 focus:ring-pitch/20"
+                      aria-expanded={scoringDetailsOpen}
+                    >
+                      {scoringDetailsOpen ? "Hide scoring details" : "Show scoring details"}
+                    </button>
+                  </div>
+                  {scoringDetailsOpen && (
+                    <div className="mt-3 space-y-2">
+                      {pointsBreakdown.map((item) => (
+                        <div key={item.label} className="flex justify-between gap-3 rounded-xl bg-white px-3 py-2">
+                          <span>{item.label}</span>
+                          <span className="shrink-0 font-black text-pitch">{item.points > 0 ? `+${item.points}` : "0 pts"}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between border-t border-black/[0.06] pt-2 text-ink">
+                        <span>Total</span>
+                        <span>{pointsEarned} {pointsEarned === 1 ? "point" : "points"}</span>
                       </div>
-                    ))}
-                  </div>
-                  <div className="mt-2 flex justify-between border-t border-black/[0.06] pt-2 text-ink">
-                    <span>Total</span>
-                    <span>{pointsEarned} {pointsEarned === 1 ? "point" : "points"}</span>
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -370,7 +413,7 @@ function leaderboardMovement(playerId: string, currentIndex: number, previousRan
 function leaderboardReasonLabel(reason: string) {
   if (reason === "exact") return "🎯 Exact score";
   if (reason === "outcome") return "🏆 Correct outcome";
-  if (reason === "goal diff") return "📐 Goal difference";
+  if (reason === "goal diff") return "📐 Correct margin";
   if (reason === "team score") return "⚽ Team score";
   return "Points";
 }
