@@ -131,22 +131,35 @@ function pointBreakdown(prediction: Prediction, match: Match) {
   const items: { label: string; points: number }[] = [];
 
   if (Math.sign(predictedGoalDifference) === Math.sign(actualGoalDifference)) {
-    items.push({ label: "Correct outcome", points: 3 });
+    items.push({ label: "🏆 Correct outcome", points: 3 });
   }
   if (prediction.teamAScore === match.teamAScore && prediction.teamBScore === match.teamBScore) {
-    items.push({ label: "Exact score bonus", points: 2 });
+    items.push({ label: "🎯 Exact score", points: 2 });
   }
   if (predictedGoalDifference === actualGoalDifference) {
-    items.push({ label: "Goal difference", points: 1 });
+    items.push({ label: "📐 Correct margin", points: 1 });
   }
   if (prediction.teamAScore === match.teamAScore) {
-    items.push({ label: `${match.teamA} goals`, points: 1 });
+    items.push({ label: `⚽ ${match.teamA} score`, points: 1 });
   }
   if (prediction.teamBScore === match.teamBScore) {
-    items.push({ label: `${match.teamB} goals`, points: 1 });
+    items.push({ label: `⚽ ${match.teamB} score`, points: 1 });
   }
 
   return items.length > 0 ? items : [{ label: "No points", points: 0 }];
+}
+
+function scoringSummaryLabel(prediction: Prediction, match: Match) {
+  if (match.teamAScore === null || match.teamBScore === null) return null;
+
+  const predictedGoalDifference = prediction.teamAScore - prediction.teamBScore;
+  const actualGoalDifference = match.teamAScore - match.teamBScore;
+
+  if (prediction.teamAScore === match.teamAScore && prediction.teamBScore === match.teamBScore) return "🎯 Exact score";
+  if (Math.sign(predictedGoalDifference) === Math.sign(actualGoalDifference)) return "🏆 Correct outcome";
+  if (predictedGoalDifference === actualGoalDifference) return "📐 Correct margin";
+  if (prediction.teamAScore === match.teamAScore || prediction.teamBScore === match.teamBScore) return "⚽ Team score";
+  return "No points";
 }
 
 function penaltyWinner(match: Match) {
@@ -177,6 +190,7 @@ function MatchCard({
   const [teamBPkScore, setTeamBPkScore] = useState(match.teamBPkScore?.toString() ?? "");
   const [advancingTeam, setAdvancingTeam] = useState<AdvancingTeam | null>(prediction?.advancingTeam ?? null);
   const [message, setMessage] = useState("");
+  const [scoringDetailsOpen, setScoringDetailsOpen] = useState(false);
   const locked = matchDateFromUtc(match.startsAt) <= new Date();
   const completed = match.teamAScore !== null && match.teamBScore !== null;
   const knockout = KNOCKOUT_STAGES.some((option) => option.stage === match.stage);
@@ -208,6 +222,7 @@ function MatchCard({
       ? predictionPoints(prediction.teamAScore, prediction.teamBScore, match.teamAScore!, match.teamBScore!)
       : null;
   const pointsBreakdown = completed && prediction ? pointBreakdown(prediction, match) : [];
+  const summaryLabel = completed && prediction ? scoringSummaryLabel(prediction, match) : null;
   const showUserResultSummary = !admin && !showOfficialResult && (completed || (locked && !completed));
 
   useEffect(() => {
@@ -216,6 +231,7 @@ function MatchCard({
     setTeamAPkScore(match.teamAPkScore !== null ? String(match.teamAPkScore) : "");
     setTeamBPkScore(match.teamBPkScore !== null ? String(match.teamBPkScore) : "");
     setAdvancingTeam(prediction?.advancingTeam ?? null);
+    setScoringDetailsOpen(false);
   }, [prediction, admin, showOfficialResult, match.teamAScore, match.teamBScore, match.teamAPkScore, match.teamBPkScore]);
 
   async function submit() {
@@ -291,34 +307,61 @@ function MatchCard({
           {completed ? (
             <>
               {prediction && (
-                <div>
-                  <div className="text-ink/45">Your pick:</div>
-                  <div className="text-ink">{prediction.teamAScore} - {prediction.teamBScore}</div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <div className="text-ink/45">Your pick</div>
+                    <div className="mt-0.5 text-sm font-black text-ink">{prediction.teamAScore} - {prediction.teamBScore}</div>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <div className="text-ink/45">Actual result</div>
+                    <div className="mt-0.5 text-sm font-black text-ink">{match.teamAScore} - {match.teamBScore}</div>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <div className="text-ink/45">Points earned</div>
+                    <div className="mt-0.5 text-sm font-black text-pitch">{pointsEarned} {pointsEarned === 1 ? "point" : "points"}</div>
+                  </div>
                   {prediction.advancingTeam && prediction.teamAScore === prediction.teamBScore && (
-                    <div className="text-ink">{prediction.advancingTeam === "team_a" ? match.teamA : match.teamB} advances</div>
+                    <div className="rounded-xl bg-white px-3 py-2 sm:col-span-3">
+                      <div className="text-ink/45">Advances</div>
+                      <div className="mt-0.5 text-sm font-black text-ink">{prediction.advancingTeam === "team_a" ? match.teamA : match.teamB}</div>
+                    </div>
                   )}
                 </div>
               )}
-              <div className={prediction ? "mt-2" : ""}>
-                <div className="text-ink/45">Actual result:</div>
-                <div className="text-ink">{match.teamAScore} - {match.teamBScore}</div>
-                {hasPenaltyResult && <div className="text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore} on penalties</div>}
-              </div>
+              {!prediction && (
+                <div>
+                  <div className="text-ink/45">Actual result</div>
+                  <div className="text-ink">{match.teamAScore} - {match.teamBScore}</div>
+                </div>
+              )}
+              {hasPenaltyResult && <div className="mt-2 rounded-xl bg-white px-3 py-2 text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore} on penalties</div>}
               {prediction && (
-                <div className="mt-3 border-t border-black/[0.06] pt-2">
-                  <div className="text-ink/45">Points earned:</div>
-                  <div className="mt-1 space-y-1">
-                    {pointsBreakdown.map((item) => (
-                      <div key={item.label} className="flex justify-between gap-3">
-                        <span>{item.label}</span>
-                        <span className="shrink-0 text-pitch">+{item.points}</span>
+                <div className="mt-3 border-t border-black/[0.06] pt-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className={`rounded-full px-3 py-1 font-black ${pointsEarned === 0 ? "bg-black/[0.05] text-ink/55" : "bg-lime text-pitch"}`}>{summaryLabel}</span>
+                    <button
+                      type="button"
+                      onClick={() => setScoringDetailsOpen((open) => !open)}
+                      className="min-h-10 rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-ink transition hover:bg-black/[0.03] focus:outline-none focus:ring-2 focus:ring-pitch/20"
+                      aria-expanded={scoringDetailsOpen}
+                    >
+                      {scoringDetailsOpen ? "Hide scoring details" : "Show scoring details"}
+                    </button>
+                  </div>
+                  {scoringDetailsOpen && (
+                    <div className="mt-3 space-y-2">
+                      {pointsBreakdown.map((item) => (
+                        <div key={item.label} className="flex justify-between gap-3 rounded-xl bg-white px-3 py-2">
+                          <span>{item.label}</span>
+                          <span className="shrink-0 font-black text-pitch">{item.points > 0 ? `+${item.points}` : "0 pts"}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between border-t border-black/[0.06] pt-2 text-ink">
+                        <span>Total</span>
+                        <span>{pointsEarned} {pointsEarned === 1 ? "point" : "points"}</span>
                       </div>
-                    ))}
-                  </div>
-                  <div className="mt-2 flex justify-between border-t border-black/[0.06] pt-2 text-ink">
-                    <span>Total</span>
-                    <span>{pointsEarned} {pointsEarned === 1 ? "point" : "points"}</span>
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -365,6 +408,14 @@ function leaderboardMovement(playerId: string, currentIndex: number, previousRan
   if (previousRank > currentRank) return "▲";
   if (previousRank < currentRank) return "▼";
   return "►";
+}
+
+function leaderboardReasonLabel(reason: string) {
+  if (reason === "exact") return "🎯 Exact score";
+  if (reason === "outcome") return "🏆 Correct outcome";
+  if (reason === "goal diff") return "📐 Correct margin";
+  if (reason === "team score") return "⚽ Team score";
+  return "Points";
 }
 
 function testScore() {
@@ -432,6 +483,7 @@ export default function Home() {
   const [favoriteTeamBusy, setFavoriteTeamBusy] = useState(false);
   const [favoriteTeamMessage, setFavoriteTeamMessage] = useState("");
   const [previousLeaderboardRanks, setPreviousLeaderboardRanks] = useState<Map<string, number>>(new Map());
+  const [openMatchHistories, setOpenMatchHistories] = useState<Set<string>>(new Set());
   const [showBackToTop, setShowBackToTop] = useState(false);
   const picksSectionRef = useRef<HTMLElement | null>(null);
   const bracketSectionRef = useRef<HTMLElement | null>(null);
@@ -622,6 +674,15 @@ export default function Home() {
     } finally {
       setTestBusy(null);
     }
+  }
+
+  function toggleMatchHistory(playerId: string) {
+    setOpenMatchHistories((current) => {
+      const next = new Set(current);
+      if (next.has(playerId)) next.delete(playerId);
+      else next.add(playerId);
+      return next;
+    });
   }
   async function submitPinChange(event: FormEvent) {
     event.preventDefault();
@@ -861,27 +922,73 @@ export default function Home() {
       ) : tab === "table" ? (
         <section className="mt-6">
           <div className="mb-4"><h2 className="text-xl font-black">Leaderboard</h2><p className="mt-1 text-sm text-ink/55">Exact scores break point ties.</p></div>
-          <div className="overflow-hidden rounded-2xl bg-white shadow-card">
-            {data?.leaderboard.map((row, index) => (
-              <div key={row.playerId} className="border-b border-black/[0.06] px-4 py-4 last:border-0">
-                <div className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2">
-                  <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${index === 0 ? "bg-lime text-pitch" : "bg-black/[0.05]"}`}>{leaderboardRank(index)}</span>
-                  <div><p className="font-extrabold"><span className="mr-1 text-pitch">{leaderboardMovement(row.playerId, index, previousLeaderboardRanks)}</span>{row.name}</p><p className="text-xs text-ink/45">{row.exactScores} exact / {row.correctOutcomes} outcomes / {row.goalDifferences} goal diff</p></div>
-                  <div className="text-right"><span className="text-2xl font-black">{row.points}</span><span className="ml-1 text-xs font-bold text-ink/40">pts</span></div>
-                </div>
-                {player.isAdmin && row.details.length > 0 && (
-                  <div className="mt-3 space-y-1 pl-12 text-xs font-semibold leading-5 text-ink/60">
-                    {row.details.map((detail) => (
-                      <div key={detail.matchId} className="flex justify-between gap-3">
-                        <span>{detail.label}</span>
-                        <span className="shrink-0 text-pitch">+{detail.points} {detail.reason}</span>
+          <div className="space-y-3">
+            {data?.leaderboard.map((row, index) => {
+              const historyOpen = openMatchHistories.has(row.playerId);
+
+              return (
+                <article key={row.playerId} className="overflow-hidden rounded-2xl bg-white shadow-card">
+                  <div className="p-4">
+                    <div className="grid grid-cols-[2.75rem_1fr_auto] items-center gap-3">
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-black ${index === 0 ? "bg-lime text-pitch" : "bg-black/[0.05] text-ink/75"}`}>{leaderboardRank(index)}</span>
+                      <div className="min-w-0">
+                        <p className="truncate font-extrabold"><span className="mr-1 text-pitch">{leaderboardMovement(row.playerId, index, previousLeaderboardRanks)}</span>{row.name}</p>
+                        <p className="mt-0.5 text-xs font-semibold text-ink/45">Rank #{index + 1}</p>
                       </div>
-                    ))}
+                      <div className="rounded-xl bg-pitch px-3 py-2 text-right text-white">
+                        <span className="block text-2xl font-black leading-none">{row.points}</span>
+                        <span className="text-[0.65rem] font-bold uppercase tracking-wider text-white/75">pts</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-xl bg-black/[0.03] px-2 py-2">
+                        <p className="text-lg font-black leading-none">{row.exactScores}</p>
+                        <p className="mt-1 text-[0.65rem] font-bold uppercase tracking-wider text-ink/45">Exact</p>
+                      </div>
+                      <div className="rounded-xl bg-black/[0.03] px-2 py-2">
+                        <p className="text-lg font-black leading-none">{row.correctOutcomes}</p>
+                        <p className="mt-1 text-[0.65rem] font-bold uppercase tracking-wider text-ink/45">Outcomes</p>
+                      </div>
+                      <div className="rounded-xl bg-black/[0.03] px-2 py-2">
+                        <p className="text-lg font-black leading-none">{row.goalDifferences}</p>
+                        <p className="mt-1 text-[0.65rem] font-bold uppercase tracking-wider text-ink/45">Goal diff</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleMatchHistory(row.playerId)}
+                      className="mt-3 flex min-h-10 w-full items-center justify-between rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-ink transition hover:bg-black/[0.03] focus:outline-none focus:ring-2 focus:ring-pitch/20"
+                      aria-expanded={historyOpen}
+                    >
+                      <span>{historyOpen ? "Hide match history" : "Show match history"}</span>
+                      <span className="text-pitch">{row.details.length} scored</span>
+                    </button>
                   </div>
-                )}
-              </div>
-            ))}
-            {data && data.leaderboard.length === 0 && <p className="p-8 text-center text-sm text-ink/50">No players yet.</p>}
+                  {historyOpen && (
+                    <div className="border-t border-black/[0.06] bg-black/[0.02] px-4 py-3">
+                      {row.details.length === 0 ? (
+                        <p className="py-2 text-sm font-semibold text-ink/50">No scored matches yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {row.details.map((detail) => (
+                            <div key={detail.matchId} className="rounded-xl bg-white px-3 py-3 text-xs font-semibold leading-5 shadow-sm">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-extrabold text-ink">{detail.label}</p>
+                                  <p className="mt-1 text-ink/55">{leaderboardReasonLabel(detail.reason)}</p>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-lime px-2.5 py-1 font-black text-pitch">+{detail.points} pts</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+            {data && data.leaderboard.length === 0 && <p className="rounded-2xl bg-white p-8 text-center text-sm text-ink/50 shadow-card">No players yet.</p>}
           </div>
           <div className="mt-5 rounded-2xl border border-black/[0.06] p-4 text-xs leading-6 text-ink/60"><strong className="text-ink">Tie-breakers:</strong> exact scores, then correct outcomes, then goal difference.</div>
         </section>
