@@ -429,6 +429,7 @@ export default function Home() {
   const [favoriteTeamBusy, setFavoriteTeamBusy] = useState(false);
   const [favoriteTeamMessage, setFavoriteTeamMessage] = useState("");
   const [previousLeaderboardRanks, setPreviousLeaderboardRanks] = useState<Map<string, number>>(new Map());
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const picksSectionRef = useRef<HTMLElement | null>(null);
   const bracketSectionRef = useRef<HTMLElement | null>(null);
   const picksAutoScrolledRef = useRef(false);
@@ -437,6 +438,15 @@ export default function Home() {
 
   useEffect(() => { const saved = window.localStorage.getItem(SESSION_KEY); if (saved) setPlayer(JSON.parse(saved)); }, []);
   useEffect(() => { if (!player) return; window.localStorage.setItem(SESSION_KEY, JSON.stringify(player)); refresh(player); const timer = window.setInterval(() => refresh(player), 30000); return () => window.clearInterval(timer); }, [player]);
+  useEffect(() => {
+    function updateBackToTopVisibility() {
+      setShowBackToTop(window.scrollY > 360);
+    }
+
+    updateBackToTopVisibility();
+    window.addEventListener("scroll", updateBackToTopVisibility, { passive: true });
+    return () => window.removeEventListener("scroll", updateBackToTopVisibility);
+  }, []);
   useEffect(() => {
     if (!data) return;
     let previousOrder: string[] = [];
@@ -638,6 +648,10 @@ export default function Home() {
     }
   }
   function logout() { window.localStorage.removeItem(SESSION_KEY); setPlayer(null); setData(null); }
+  function scrollToTop() {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  }
 
   const predictionMap = useMemo(() => new Map(data?.predictions.map((item) => [item.matchId, item])), [data]);
   const bracketMatches = useMemo(
@@ -965,6 +979,17 @@ export default function Home() {
             </div>
           )}
         </section>
+      )}
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={scrollToTop}
+          className="fixed bottom-24 right-4 z-40 inline-flex min-h-11 items-center gap-2 rounded-full border border-black/10 bg-white/95 px-4 py-2 text-xs font-black text-ink shadow-card backdrop-blur transition hover:bg-lime focus:outline-none focus:ring-2 focus:ring-pitch/25 sm:bottom-8 sm:right-8"
+          aria-label="Back to top"
+        >
+          <span aria-hidden="true" className="text-base leading-none">↑</span>
+          <span>Top</span>
+        </button>
       )}
     </main>
   );
