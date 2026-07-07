@@ -15,7 +15,7 @@ Current focus: improve stability, polish, and workflow.
 - [x] Create develop branch
 - [x] Auto-scroll to today's match
 - [x] Back to top button
-- [ ] Maintenance mode
+- [x] Maintenance mode
 - [ ] Leaderboard redesign
 - [ ] Dark mode
 
