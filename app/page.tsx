@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { changePin, importOfficialScoresSoFar, loadPool, login, resetTestResults, saveFavoriteTeam, savePrediction, saveResult } from "@/lib/api";
 import { predictionPoints } from "@/lib/scoring";
 import { formatMatchTime, matchDateFromUtc } from "@/lib/time";
@@ -227,7 +227,7 @@ function MatchCard({
   }
 
   return (
-    <article className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-card">
+    <article data-match-id={match.id} className="scroll-mt-6 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-card">
       <div className="flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-wider text-ink/45">
         <span>{match.stage}</span>
         <span className="flex items-center gap-2">
@@ -384,6 +384,34 @@ function isGroupStage(match: Match) {
   return /^Group [A-L]$/.test(match.stage);
 }
 
+function hasFinalScore(match: Match) {
+  return match.teamAScore !== null && match.teamBScore !== null;
+}
+
+function isSameLocalDay(first: Date, second: Date) {
+  return first.getFullYear() === second.getFullYear() && first.getMonth() === second.getMonth() && first.getDate() === second.getDate();
+}
+
+function firstRelevantMatch(matches: Match[]) {
+  const now = new Date();
+  const sortedMatches = [...matches].sort((first, second) => matchDateFromUtc(first.startsAt).getTime() - matchDateFromUtc(second.startsAt).getTime());
+  const todaysMatch = sortedMatches.find((match) => isSameLocalDay(matchDateFromUtc(match.startsAt), now));
+  if (todaysMatch) return todaysMatch;
+
+  return sortedMatches.find((match) => !hasFinalScore(match) && matchDateFromUtc(match.startsAt) > now) ?? null;
+}
+
+function scrollMatchIntoView(container: HTMLElement | null, matchId: string) {
+  const target = Array.from(container?.querySelectorAll<HTMLElement>("[data-match-id]") ?? []).find(
+    (element) => element.dataset.matchId === matchId,
+  );
+  if (!target) return false;
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  return true;
+}
+
 export default function Home() {
   const [player, setPlayer] = useState<Player | null>(null);
   const [data, setData] = useState<PoolData | null>(null);
@@ -401,9 +429,24 @@ export default function Home() {
   const [favoriteTeamBusy, setFavoriteTeamBusy] = useState(false);
   const [favoriteTeamMessage, setFavoriteTeamMessage] = useState("");
   const [previousLeaderboardRanks, setPreviousLeaderboardRanks] = useState<Map<string, number>>(new Map());
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const picksSectionRef = useRef<HTMLElement | null>(null);
+  const bracketSectionRef = useRef<HTMLElement | null>(null);
+  const picksAutoScrolledRef = useRef(false);
+  const bracketAutoScrolledRef = useRef(false);
+  const pendingBracketScrollMatchIdRef = useRef<string | null>(null);
 
   useEffect(() => { const saved = window.localStorage.getItem(SESSION_KEY); if (saved) setPlayer(JSON.parse(saved)); }, []);
   useEffect(() => { if (!player) return; window.localStorage.setItem(SESSION_KEY, JSON.stringify(player)); refresh(player); const timer = window.setInterval(() => refresh(player), 30000); return () => window.clearInterval(timer); }, [player]);
+  useEffect(() => {
+    function updateBackToTopVisibility() {
+      setShowBackToTop(window.scrollY > 360);
+    }
+
+    updateBackToTopVisibility();
+    window.addEventListener("scroll", updateBackToTopVisibility, { passive: true });
+    return () => window.removeEventListener("scroll", updateBackToTopVisibility);
+  }, []);
   useEffect(() => {
     if (!data) return;
     let previousOrder: string[] = [];
@@ -605,6 +648,10 @@ export default function Home() {
     }
   }
   function logout() { window.localStorage.removeItem(SESSION_KEY); setPlayer(null); setData(null); }
+  function scrollToTop() {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  }
 
   const predictionMap = useMemo(() => new Map(data?.predictions.map((item) => [item.matchId, item])), [data]);
   const bracketMatches = useMemo(
@@ -616,6 +663,36 @@ export default function Home() {
     [bracketMatches, bracketStage],
   );
   const worldCupTeams = data?.favoriteTeamOptions ?? [];
+
+  useEffect(() => {
+    if (tab !== "picks" || !data || picksAutoScrolledRef.current) return;
+    const targetMatch = firstRelevantMatch(data.matches);
+    if (!targetMatch) return;
+
+    picksAutoScrolledRef.current = true;
+    window.requestAnimationFrame(() => scrollMatchIntoView(picksSectionRef.current, targetMatch.id));
+  }, [data, tab]);
+
+  useEffect(() => {
+    if (tab !== "bracket" || bracketAutoScrolledRef.current || bracketMatches.length === 0) return;
+    const targetMatch = firstRelevantMatch(bracketMatches);
+    if (!targetMatch) return;
+
+    bracketAutoScrolledRef.current = true;
+    pendingBracketScrollMatchIdRef.current = targetMatch.id;
+    if (targetMatch.stage !== bracketStage) setBracketStage(targetMatch.stage);
+  }, [bracketMatches, bracketStage, tab]);
+
+  useEffect(() => {
+    if (tab !== "bracket" || !pendingBracketScrollMatchIdRef.current) return;
+    if (!selectedBracketMatches.some((match) => match.id === pendingBracketScrollMatchIdRef.current)) return;
+
+    const matchId = pendingBracketScrollMatchIdRef.current;
+    window.requestAnimationFrame(() => {
+      if (scrollMatchIntoView(bracketSectionRef.current, matchId)) pendingBracketScrollMatchIdRef.current = null;
+    });
+  }, [selectedBracketMatches, tab]);
+
   if (!player) return <Login onLogin={setPlayer} />;
   const currentLeaderboardIndex = data?.leaderboard.findIndex((row) => row.playerId === player.id) ?? -1;
   const currentLeaderboardRow = currentLeaderboardIndex >= 0 ? data?.leaderboard[currentLeaderboardIndex] : null;
@@ -663,7 +740,7 @@ export default function Home() {
       </nav>
 
       {tab === "picks" ? (
-        <section className="mt-6 space-y-3">
+        <section ref={picksSectionRef} className="mt-6 space-y-3">
           <div className="mb-4"><h2 className="text-xl font-black">{player.isAdmin ? "Enter final scores" : "Upcoming matches"}</h2><p className="mt-1 text-sm text-ink/55">{player.isAdmin ? "The table recalculates after every saved result." : "Picks lock automatically at kickoff."}</p></div>
           {testToolsEnabled && (
             <div className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-card">
@@ -731,7 +808,7 @@ export default function Home() {
           {!data ? <p className="py-12 text-center text-sm text-ink/50">Loading matches...</p> : data.matches.map((match) => <MatchCard key={match.id} match={match} prediction={predictionMap.get(match.id)} admin={player.isAdmin} onSavePrediction={updatePrediction} onSaveResult={updateResult} />)}
         </section>
       ) : tab === "bracket" ? (
-        <section className="mt-6">
+        <section ref={bracketSectionRef} className="mt-6">
           <div className="mb-4"><h2 className="text-xl font-black">Knockout bracket</h2><p className="mt-1 text-sm text-ink/55">Rounds appear automatically after the group stage is complete.</p></div>
           {!data ? (
             <p className="py-12 text-center text-sm text-ink/50">Loading bracket...</p>
@@ -902,6 +979,17 @@ export default function Home() {
             </div>
           )}
         </section>
+      )}
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={scrollToTop}
+          className="fixed bottom-24 right-4 z-40 inline-flex min-h-11 items-center gap-2 rounded-full border border-black/10 bg-white/95 px-4 py-2 text-xs font-black text-ink shadow-card backdrop-blur transition hover:bg-lime focus:outline-none focus:ring-2 focus:ring-pitch/25 sm:bottom-8 sm:right-8"
+          aria-label="Back to top"
+        >
+          <span aria-hidden="true" className="text-base leading-none">↑</span>
+          <span>Top</span>
+        </button>
       )}
     </main>
   );

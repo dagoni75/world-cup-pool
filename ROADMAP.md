@@ -12,7 +12,7 @@ Players predict scores, compete with friends, follow live standings, and build a
 
 Current focus: improve stability, polish, and workflow.
 
-- [ ] Create develop branch
+- [x] Create develop branch
 - [ ] Auto-scroll to today's match
 - [ ] Maintenance mode
 - [ ] Leaderboard redesign
