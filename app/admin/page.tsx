@@ -3,7 +3,9 @@
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import MaintenanceScreen from "@/app/MaintenanceScreen";
 import { generateFullTestTournament, saveResult } from "@/lib/api";
+import { isMaintenanceMode } from "@/lib/maintenance";
 import { formatMatchTime } from "@/lib/time";
 import { Player } from "@/lib/types";
 
@@ -227,6 +229,7 @@ function AdminMatchRow({
 }
 
 export default function AdminPage() {
+  const maintenanceMode = isMaintenanceMode();
   const [player, setPlayer] = useState<Player | null>(null);
   const [matches, setMatches] = useState<AdminMatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -303,12 +306,30 @@ export default function AdminPage() {
     }
   }
 
+  function handleMaintenanceLogin(nextPlayer: Player) {
+    setPlayer(nextPlayer);
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify(nextPlayer));
+    if (nextPlayer.isAdmin) {
+      refresh();
+    }
+  }
+
+  function logout() {
+    window.localStorage.removeItem(SESSION_KEY);
+    setPlayer(null);
+    setMatches([]);
+  }
+
   if (loading) {
     return (
       <main className="mx-auto min-h-screen max-w-2xl px-4 py-10 sm:px-6">
         <p className="py-12 text-center text-sm text-ink/50">Loading admin...</p>
       </main>
     );
+  }
+
+  if (maintenanceMode && !player?.isAdmin) {
+    return <MaintenanceScreen player={player} onLogin={handleMaintenanceLogin} onLogout={logout} />;
   }
 
   if (!player?.isAdmin) {

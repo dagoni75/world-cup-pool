@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { changePin, importOfficialScoresSoFar, loadPool, login, resetTestResults, saveFavoriteTeam, savePrediction, saveResult } from "@/lib/api";
+import MaintenanceScreen from "@/app/MaintenanceScreen";
+import { isMaintenanceMode } from "@/lib/maintenance";
 import { predictionPoints } from "@/lib/scoring";
 import { formatMatchTime, matchDateFromUtc } from "@/lib/time";
 import { AdvancingTeam, Match, Player, PoolData, Prediction } from "@/lib/types";
@@ -413,6 +415,7 @@ function scrollMatchIntoView(container: HTMLElement | null, matchId: string) {
 }
 
 export default function Home() {
+  const maintenanceMode = isMaintenanceMode();
   const [player, setPlayer] = useState<Player | null>(null);
   const [data, setData] = useState<PoolData | null>(null);
   const [tab, setTab] = useState<"picks" | "bracket" | "table" | "profile" | "admin">("picks");
@@ -437,7 +440,17 @@ export default function Home() {
   const pendingBracketScrollMatchIdRef = useRef<string | null>(null);
 
   useEffect(() => { const saved = window.localStorage.getItem(SESSION_KEY); if (saved) setPlayer(JSON.parse(saved)); }, []);
-  useEffect(() => { if (!player) return; window.localStorage.setItem(SESSION_KEY, JSON.stringify(player)); refresh(player); const timer = window.setInterval(() => refresh(player), 30000); return () => window.clearInterval(timer); }, [player]);
+  useEffect(() => {
+    if (!player) return;
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify(player));
+    if (maintenanceMode && !player.isAdmin) {
+      setData(null);
+      return;
+    }
+    refresh(player);
+    const timer = window.setInterval(() => refresh(player), 30000);
+    return () => window.clearInterval(timer);
+  }, [player, maintenanceMode]);
   useEffect(() => {
     function updateBackToTopVisibility() {
       setShowBackToTop(window.scrollY > 360);
@@ -692,6 +705,10 @@ export default function Home() {
       if (scrollMatchIntoView(bracketSectionRef.current, matchId)) pendingBracketScrollMatchIdRef.current = null;
     });
   }, [selectedBracketMatches, tab]);
+
+  if (maintenanceMode && !player?.isAdmin) {
+    return <MaintenanceScreen player={player} onLogin={setPlayer} onLogout={logout} />;
+  }
 
   if (!player) return <Login onLogin={setPlayer} />;
   const currentLeaderboardIndex = data?.leaderboard.findIndex((row) => row.playerId === player.id) ?? -1;
