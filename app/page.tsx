@@ -149,19 +149,6 @@ function pointBreakdown(prediction: Prediction, match: Match) {
   return items.length > 0 ? items : [{ label: "No points", points: 0 }];
 }
 
-function scoringSummaryLabel(prediction: Prediction, match: Match) {
-  if (match.teamAScore === null || match.teamBScore === null) return null;
-
-  const predictedGoalDifference = prediction.teamAScore - prediction.teamBScore;
-  const actualGoalDifference = match.teamAScore - match.teamBScore;
-
-  if (prediction.teamAScore === match.teamAScore && prediction.teamBScore === match.teamBScore) return "🎯 Exact score";
-  if (Math.sign(predictedGoalDifference) === Math.sign(actualGoalDifference)) return "🏆 Correct outcome";
-  if (predictedGoalDifference === actualGoalDifference) return "📐 Correct margin";
-  if (prediction.teamAScore === match.teamAScore || prediction.teamBScore === match.teamBScore) return "⚽ Team score";
-  return "No points";
-}
-
 function penaltyWinner(match: Match) {
   if (match.teamAPkScore === null || match.teamBPkScore === null) return null;
   if (match.teamAPkScore > match.teamBPkScore) return match.teamA;
@@ -222,7 +209,6 @@ function MatchCard({
       ? predictionPoints(prediction.teamAScore, prediction.teamBScore, match.teamAScore!, match.teamBScore!)
       : null;
   const pointsBreakdown = completed && prediction ? pointBreakdown(prediction, match) : [];
-  const summaryLabel = completed && prediction ? scoringSummaryLabel(prediction, match) : null;
   const showUserResultSummary = !admin && !showOfficialResult && (completed || (locked && !completed));
 
   useEffect(() => {
@@ -296,7 +282,7 @@ function MatchCard({
           </div>
         </div>
       )}
-      {hasPenaltyResult && (
+      {hasPenaltyResult && !showUserResultSummary && (
         <div className="mt-3 rounded-xl bg-black/[0.03] px-3 py-2 text-center text-xs font-bold text-ink/55">
           <div>{match.teamA} {match.teamAScore} - {match.teamBScore} {match.teamB}</div>
           <div className="mt-1 text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore} on penalties</div>
@@ -306,51 +292,53 @@ function MatchCard({
         <div className="mt-3 rounded-xl bg-black/[0.03] px-3 py-3 text-xs font-semibold leading-5 text-ink/65">
           {completed ? (
             <>
-              {prediction && (
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div className="rounded-xl bg-white px-3 py-2">
-                    <div className="text-ink/45">Your pick</div>
-                    <div className="mt-0.5 text-sm font-black text-ink">{prediction.teamAScore} - {prediction.teamBScore}</div>
-                  </div>
-                  <div className="rounded-xl bg-white px-3 py-2">
-                    <div className="text-ink/45">Actual result</div>
-                    <div className="mt-0.5 text-sm font-black text-ink">{match.teamAScore} - {match.teamBScore}</div>
-                  </div>
-                  <div className="rounded-xl bg-white px-3 py-2">
-                    <div className="text-ink/45">Points earned</div>
-                    <div className="mt-0.5 text-sm font-black text-pitch">{pointsEarned} {pointsEarned === 1 ? "point" : "points"}</div>
-                  </div>
-                  {prediction.advancingTeam && prediction.teamAScore === prediction.teamBScore && (
-                    <div className="rounded-xl bg-white px-3 py-2 sm:col-span-3">
-                      <div className="text-ink/45">Advances</div>
-                      <div className="mt-0.5 text-sm font-black text-ink">{prediction.advancingTeam === "team_a" ? match.teamA : match.teamB}</div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {!prediction && (
-                <div>
-                  <div className="text-ink/45">Actual result</div>
-                  <div className="text-ink">{match.teamAScore} - {match.teamBScore}</div>
-                </div>
-              )}
-              {hasPenaltyResult && <div className="mt-2 rounded-xl bg-white px-3 py-2 text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore} on penalties</div>}
-              {prediction && (
-                <div className="mt-3 border-t border-black/[0.06] pt-3">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <span className={`rounded-full px-3 py-1 font-black ${pointsEarned === 0 ? "bg-black/[0.05] text-ink/55" : "bg-lime text-pitch"}`}>{summaryLabel}</span>
-                    <button
-                      type="button"
-                      onClick={() => setScoringDetailsOpen((open) => !open)}
-                      className="min-h-10 rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-ink transition hover:bg-black/[0.03] focus:outline-none focus:ring-2 focus:ring-pitch/20"
-                      aria-expanded={scoringDetailsOpen}
-                    >
-                      {scoringDetailsOpen ? "Hide scoring details" : "Show scoring details"}
-                    </button>
-                  </div>
-                  {scoringDetailsOpen && (
-                    <div className="mt-3 space-y-2">
-                      {pointsBreakdown.map((item) => (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setScoringDetailsOpen((open) => !open)}
+                  className="flex min-h-10 w-full items-center justify-between rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-ink transition hover:bg-black/[0.03] focus:outline-none focus:ring-2 focus:ring-pitch/20"
+                  aria-expanded={scoringDetailsOpen}
+                >
+                  <span>{scoringDetailsOpen ? "Hide scoring details" : "Show scoring details"}</span>
+                  <span className="text-pitch">{scoringDetailsOpen ? "▲" : "▼"}</span>
+                </button>
+                {scoringDetailsOpen && (
+                  <div className="mt-3 space-y-2">
+                    <div className="space-y-1 rounded-xl bg-white px-3 py-2">
+                      {prediction ? (
+                        <>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-ink/45">Your pick</span>
+                          <span className="font-black text-ink">{prediction.teamAScore} - {prediction.teamBScore}</span>
+                        </div>
+                        {prediction.advancingTeam && prediction.teamAScore === prediction.teamBScore && (
+                          <div className="flex justify-between gap-3">
+                            <span className="text-ink/45">Advances</span>
+                            <span className="font-black text-ink">{prediction.advancingTeam === "team_a" ? match.teamA : match.teamB}</span>
+                          </div>
+                        )}
+                        </>
+                      ) : (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-ink/45">Your pick</span>
+                          <span className="font-black text-ink">No pick submitted</span>
+                        </div>
+                      )}
+                        <div className="flex justify-between gap-3">
+                          <span className="text-ink/45">Actual result</span>
+                          <span className="font-black text-ink">{match.teamAScore} - {match.teamBScore}</span>
+                        </div>
+                        {hasPenaltyResult && (
+                          <div className="flex justify-between gap-3">
+                            <span className="text-ink/45">Penalties</span>
+                            <span className="text-right font-black text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore}</span>
+                          </div>
+                        )}
+                      </div>
+                      {prediction && pointsEarned === 0 && (
+                        <div className="rounded-xl bg-white px-3 py-2 text-ink/55">No points earned</div>
+                      )}
+                      {prediction && pointsEarned !== 0 && pointsBreakdown.map((item) => (
                         <div key={item.label} className="flex justify-between gap-3 rounded-xl bg-white px-3 py-2">
                           <span>{item.label}</span>
                           <span className="shrink-0 font-black text-pitch">{item.points > 0 ? `+${item.points}` : "0 pts"}</span>
@@ -358,12 +346,11 @@ function MatchCard({
                       ))}
                       <div className="flex justify-between border-t border-black/[0.06] pt-2 text-ink">
                         <span>Total</span>
-                        <span>{pointsEarned} {pointsEarned === 1 ? "point" : "points"}</span>
+                        <span>{pointsEarned ?? 0} {pointsEarned === 1 ? "point" : "points"}</span>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
             </>
           ) : (
             <div>Match locked - awaiting result.</div>
