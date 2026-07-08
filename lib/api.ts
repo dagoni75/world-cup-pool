@@ -1494,6 +1494,33 @@ export async function saveResult(
   await ensureKnockoutMatches(await loadMatches(), player);
 }
 
+export async function saveMatchTime(player: Player, matchId: string, startsAt: string) {
+  const currentPlayer = await requireSession(player);
+  if (!currentPlayer.is_admin) throw new Error("Admin access required.");
+  if (!matchId) throw new Error("Match not found.");
+  if (!startsAt || Number.isNaN(new Date(startsAt).getTime())) {
+    throw new Error("Enter a valid kickoff date and time.");
+  }
+
+  const { data: match, error: matchError } = await supabase
+    .from("matches")
+    .select("id")
+    .eq("id", matchId)
+    .maybeSingle();
+
+  if (matchError) throw new Error(matchError.message);
+  if (!match) throw new Error("Match not found.");
+
+  const { error } = await supabase.rpc("app_admin_set_match_time", {
+    p_match_id: matchId,
+    p_player_id: player.id,
+    p_starts_at: new Date(startsAt).toISOString(),
+    p_token: player.token,
+  });
+
+  if (error) throw new Error(error.message);
+}
+
 export async function generateTestGroupResults(player: Player) {
   const currentPlayer = await requireSession(player);
   if (!currentPlayer.is_admin) throw new Error("Admin access required.");

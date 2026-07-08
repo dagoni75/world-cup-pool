@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { changePin, importOfficialScoresSoFar, loadPool, login, resetTestResults, saveFavoriteTeam, savePrediction, saveResult } from "@/lib/api";
+import { changePin, importOfficialScoresSoFar, loadPool, login, resetTestResults, saveFavoriteTeam, saveMatchTime, savePrediction, saveResult } from "@/lib/api";
 import MaintenanceScreen from "@/app/MaintenanceScreen";
 import { isMaintenanceMode } from "@/lib/maintenance";
 import { predictionPoints } from "@/lib/scoring";
@@ -441,6 +441,89 @@ function firstRelevantMatch(matches: Match[]) {
   return sortedMatches.find((match) => !hasFinalScore(match) && matchDateFromUtc(match.startsAt) > now) ?? null;
 }
 
+function localDateInputValue(value: string) {
+  const date = matchDateFromUtc(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function localTimeInputValue(value: string) {
+  const date = matchDateFromUtc(value);
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function localInputsToUtc(dateValue: string, timeValue: string) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const [hours, minutes] = timeValue.split(":").map(Number);
+  return new Date(year, month - 1, day, hours, minutes).toISOString();
+}
+
+function AdminMatchTimeRow({ match, onSave }: { match: Match; onSave: (matchId: string, startsAt: string) => Promise<void> }) {
+  const [dateValue, setDateValue] = useState(localDateInputValue(match.startsAt));
+  const [timeValue, setTimeValue] = useState(localTimeInputValue(match.startsAt));
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setDateValue(localDateInputValue(match.startsAt));
+    setTimeValue(localTimeInputValue(match.startsAt));
+    setMessage("");
+  }, [match.id, match.startsAt]);
+
+  async function save() {
+    if (!dateValue) {
+      setMessage("Date required.");
+      return;
+    }
+    if (!timeValue) {
+      setMessage("Time required.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("Saving...");
+    try {
+      await onSave(match.id, localInputsToUtc(dateValue, timeValue));
+      setMessage("Kickoff updated.");
+      setTimeout(() => setMessage(""), 1800);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not update kickoff.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <article className="rounded-2xl bg-white p-4 shadow-card">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-ink/45">{match.stage}</p>
+          <h3 className="mt-1 text-sm font-black">{match.teamA} vs {match.teamB}</h3>
+          <p className="mt-1 text-xs font-semibold text-ink/55">Current kickoff: {formatMatchTime(match.startsAt)}</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-[8.5rem_6.5rem_auto] sm:items-end">
+          <label className="block text-xs font-bold text-ink/60">
+            Date
+            <input className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3 text-sm font-semibold outline-none focus:border-pitch focus:ring-2 focus:ring-pitch/15" type="date" value={dateValue} onChange={(event) => setDateValue(event.target.value)} />
+          </label>
+          <label className="block text-xs font-bold text-ink/60">
+            Time
+            <input className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3 text-sm font-semibold outline-none focus:border-pitch focus:ring-2 focus:ring-pitch/15" type="time" value={timeValue} onChange={(event) => setTimeValue(event.target.value)} />
+          </label>
+          <button className="h-10 rounded-xl bg-ink px-4 text-xs font-bold text-white transition hover:bg-ink/90 disabled:opacity-60" disabled={busy} onClick={save}>
+            {busy ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+      {message && <p className={`mt-3 text-xs font-semibold ${message === "Kickoff updated." || message === "Saving..." ? "text-pitch" : "text-red-700"}`}>{message}</p>}
+    </article>
+  );
+}
+
 function scrollMatchIntoView(container: HTMLElement | null, matchId: string) {
   const target = Array.from(container?.querySelectorAll<HTMLElement>("[data-match-id]") ?? []).find(
     (element) => element.dataset.matchId === matchId,
@@ -520,6 +603,7 @@ export default function Home() {
   async function updatePrediction(prediction: Prediction) { if (!player) return; await savePrediction(player, prediction); await refresh(); }
   async function saveFinalResult(matchId: string, a: number, b: number, teamAPkScore?: number, teamBPkScore?: number) { if (!player) return; await saveResult(player, matchId, a, b, teamAPkScore, teamBPkScore); }
   async function updateResult(matchId: string, a: number, b: number, teamAPkScore?: number, teamBPkScore?: number) { await saveFinalResult(matchId, a, b, teamAPkScore, teamBPkScore); await refresh(); }
+  async function updateMatchTime(matchId: string, startsAt: string) { if (!player) return; await saveMatchTime(player, matchId, startsAt); await refresh(); }
   async function saveTestGroupResults() {
     if (!player) return 0;
     const pool = await loadPool(player);
@@ -1005,6 +1089,19 @@ export default function Home() {
                   </button>
                 </div>
                 {testMessage && <p className="mt-3 text-sm font-semibold text-pitch">{testMessage}</p>}
+              </div>
+              <div>
+                <div className="mb-3">
+                  <h3 className="text-lg font-black">Edit match kickoff times</h3>
+                  <p className="mt-1 text-sm text-ink/55">Times are shown in your browser timezone and saved as UTC.</p>
+                </div>
+                <div className="space-y-3">
+                  {data.matches.length === 0 ? (
+                    <p className="rounded-2xl bg-white p-8 text-center text-sm text-ink/50 shadow-card">No matches found.</p>
+                  ) : (
+                    data.matches.map((match) => <AdminMatchTimeRow key={match.id} match={match} onSave={updateMatchTime} />)
+                  )}
+                </div>
               </div>
             </div>
           )}
