@@ -20,7 +20,6 @@ Current focus: improve stability, polish, and workflow.
 - [x] Collapsible match scoring details
 - [x] Leaderboard match history redesign
 - [x] Admin edit match date/time
-- [ ] Dark mode
 
 ---
 
