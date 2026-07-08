@@ -10,6 +10,14 @@ Players predict scores, compete with friends, follow live standings, and build a
 
 ## 🚀 Current Sprint
 
+Current focus: knockout polish and admin control.
+
+- [ ] Knockout result card redesign
+- [ ] Trophy/advancer display
+- [ ] Collapsible knockout points details
+- [ ] Admin edit teams / bracket matchups
+- [ ] Admin edit penalty shootout result
+
 Current focus: improve stability, polish, and workflow.
 
 - [x] Create develop branch
