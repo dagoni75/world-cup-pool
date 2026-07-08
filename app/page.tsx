@@ -211,7 +211,7 @@ function MatchCard({
     match.teamB.startsWith("Winner");
   const tiedScore = a !== "" && b !== "" && a === b;
   const showPenaltyInputs = admin && knockout && !isPlaceholder;
-  const showAdvancerInputs = !admin && !locked && knockout && tiedScore && !isPlaceholder;
+  const showAdvancerInputs = !admin && !locked && !completed && knockout && tiedScore && !isPlaceholder;
   const penaltyReady =
     !admin ||
     !knockout ||
