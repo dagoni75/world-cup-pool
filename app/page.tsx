@@ -168,6 +168,15 @@ function formatPenaltyScore(match: Match) {
   return `${match.teamAPkScore}–${match.teamBPkScore}`;
 }
 
+function formatFinalScore(match: Match, side: "teamA" | "teamB", includePenalties: boolean) {
+  const score = side === "teamA" ? match.teamAScore : match.teamBScore;
+  const penaltyScore = side === "teamA" ? match.teamAPkScore : match.teamBPkScore;
+
+  if (score === null) return "";
+  if (!includePenalties || penaltyScore === null) return String(score);
+  return `${score} (${penaltyScore})`;
+}
+
 function MatchCard({
   match,
   prediction,
@@ -258,18 +267,13 @@ function MatchCard({
           <div className="grid gap-2">
             <div className={`grid grid-cols-[1fr_auto] items-center gap-4 rounded-lg px-3 py-2 ${advancingTeamName === match.teamA ? "bg-white shadow-sm" : ""}`}>
               <span className="min-w-0 truncate text-sm font-extrabold text-ink sm:text-base">{match.teamA}</span>
-              <span className="text-2xl font-black tabular-nums text-ink">{match.teamAScore}</span>
+              <span className="text-2xl font-black tabular-nums text-ink">{formatFinalScore(match, "teamA", hasPenaltyResult)}</span>
             </div>
             <div className={`grid grid-cols-[1fr_auto] items-center gap-4 rounded-lg px-3 py-2 ${advancingTeamName === match.teamB ? "bg-white shadow-sm" : ""}`}>
               <span className="min-w-0 truncate text-sm font-extrabold text-ink sm:text-base">{match.teamB}</span>
-              <span className="text-2xl font-black tabular-nums text-ink">{match.teamBScore}</span>
+              <span className="text-2xl font-black tabular-nums text-ink">{formatFinalScore(match, "teamB", hasPenaltyResult)}</span>
             </div>
           </div>
-          {hasPenaltyResult && (
-            <div className="mt-3 rounded-lg bg-white px-3 py-2 text-sm font-black text-pitch">
-              {penaltyWinner(match)} wins {formatPenaltyScore(match)} on penalties
-            </div>
-          )}
           {advancingTeamName && (
             <div className="mt-2 rounded-lg bg-pitch px-3 py-2 text-sm font-black text-white">
               🏆 {advancingTeamName} advances
@@ -323,8 +327,7 @@ function MatchCard({
       )}
       {hasPenaltyResult && !showUserResultSummary && (
         <div className="mt-3 rounded-xl bg-black/[0.03] px-3 py-2 text-center text-xs font-bold text-ink/55">
-          <div>{match.teamA} {match.teamAScore} - {match.teamBScore} {match.teamB}</div>
-          <div className="mt-1 text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore} on penalties</div>
+          <div>{match.teamA} {formatFinalScore(match, "teamA", true)} - {formatFinalScore(match, "teamB", true)} {match.teamB}</div>
         </div>
       )}
       {showUserResultSummary && (
@@ -400,7 +403,7 @@ function MatchCard({
         <span className={`max-w-[65%] text-xs font-semibold ${message && message !== "Saved" && message !== "Saving..." ? "text-red-700" : "text-pitch"}`}>
           {message || (
             showOfficialResult ? (
-              completed ? `Final: ${match.teamAScore} - ${match.teamBScore}${hasPenaltyResult ? `, ${penaltyWinner(match)} wins ${match.teamAPkScore} - ${match.teamBPkScore} on penalties` : ""}` : "Awaiting result"
+              completed ? `Final: ${formatFinalScore(match, "teamA", hasPenaltyResult)} - ${formatFinalScore(match, "teamB", hasPenaltyResult)}` : "Awaiting result"
             ) : !admin ? (
               <span className="flex flex-col gap-0.5">
                 {!completed && prediction && <span>{`Your pick: ${prediction.teamAScore} - ${prediction.teamBScore}`}</span>}
