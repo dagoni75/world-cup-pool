@@ -156,6 +156,18 @@ function penaltyWinner(match: Match) {
   return null;
 }
 
+function knockoutAdvancer(match: Match) {
+  if (match.teamAScore === null || match.teamBScore === null) return null;
+  if (match.teamAScore > match.teamBScore) return match.teamA;
+  if (match.teamBScore > match.teamAScore) return match.teamB;
+  return penaltyWinner(match);
+}
+
+function formatPenaltyScore(match: Match) {
+  if (match.teamAPkScore === null || match.teamBPkScore === null) return "";
+  return `${match.teamAPkScore}–${match.teamBPkScore}`;
+}
+
 function MatchCard({
   match,
   prediction,
@@ -202,6 +214,8 @@ function MatchCard({
     match.teamAScore === match.teamBScore &&
     match.teamAPkScore !== null &&
     match.teamBPkScore !== null;
+  const showCompletedKnockoutResult = !admin && knockout && completed && !isPlaceholder;
+  const advancingTeamName = showCompletedKnockoutResult ? knockoutAdvancer(match) : null;
   const canSubmit = a !== "" && b !== "" && penaltyReady && (!showAdvancerInputs || advancingTeam !== null);
   const matchTime = formatMatchTime(match.startsAt);
   const pointsEarned =
@@ -239,15 +253,40 @@ function MatchCard({
           <span>{completed ? "Final" : matchTime}</span>
         </span>
       </div>
-      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="text-right font-extrabold leading-tight">{match.teamA}</div>
-        {isPlaceholder ? (
-          <div className="max-w-36 text-center text-xs font-bold leading-4 text-ink/45">Bracket not determined yet</div>
-        ) : (
-          <div className="flex items-center gap-2"><ScoreInput label={`${match.teamA} goals`} value={a} onChange={setA} disabled={showOfficialResult || (!admin && locked)} /><span className="font-bold text-ink/30">:</span><ScoreInput label={`${match.teamB} goals`} value={b} onChange={setB} disabled={showOfficialResult || (!admin && locked)} /></div>
-        )}
-        <div className="font-extrabold leading-tight">{match.teamB}</div>
-      </div>
+      {showCompletedKnockoutResult ? (
+        <div className="mt-4 rounded-xl border border-black/[0.06] bg-gradient-to-br from-white to-lime/20 p-3">
+          <div className="grid gap-2">
+            <div className={`grid grid-cols-[1fr_auto] items-center gap-4 rounded-lg px-3 py-2 ${advancingTeamName === match.teamA ? "bg-white shadow-sm" : ""}`}>
+              <span className="min-w-0 truncate text-sm font-extrabold text-ink sm:text-base">{match.teamA}</span>
+              <span className="text-2xl font-black tabular-nums text-ink">{match.teamAScore}</span>
+            </div>
+            <div className={`grid grid-cols-[1fr_auto] items-center gap-4 rounded-lg px-3 py-2 ${advancingTeamName === match.teamB ? "bg-white shadow-sm" : ""}`}>
+              <span className="min-w-0 truncate text-sm font-extrabold text-ink sm:text-base">{match.teamB}</span>
+              <span className="text-2xl font-black tabular-nums text-ink">{match.teamBScore}</span>
+            </div>
+          </div>
+          {hasPenaltyResult && (
+            <div className="mt-3 rounded-lg bg-white px-3 py-2 text-sm font-black text-pitch">
+              {penaltyWinner(match)} wins {formatPenaltyScore(match)} on penalties
+            </div>
+          )}
+          {advancingTeamName && (
+            <div className="mt-2 rounded-lg bg-pitch px-3 py-2 text-sm font-black text-white">
+              🏆 {advancingTeamName} advances
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div className="text-right font-extrabold leading-tight">{match.teamA}</div>
+          {isPlaceholder ? (
+            <div className="max-w-36 text-center text-xs font-bold leading-4 text-ink/45">Bracket not determined yet</div>
+          ) : (
+            <div className="flex items-center gap-2"><ScoreInput label={`${match.teamA} goals`} value={a} onChange={setA} disabled={showOfficialResult || (!admin && locked)} /><span className="font-bold text-ink/30">:</span><ScoreInput label={`${match.teamB} goals`} value={b} onChange={setB} disabled={showOfficialResult || (!admin && locked)} /></div>
+          )}
+          <div className="font-extrabold leading-tight">{match.teamB}</div>
+        </div>
+      )}
       {showPenaltyInputs && (
         <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-xl bg-black/[0.03] px-3 py-3">
           <div className="text-right text-xs font-black uppercase tracking-[0.16em] text-ink/45">PK</div>
@@ -299,7 +338,7 @@ function MatchCard({
                   className="flex min-h-10 w-full items-center justify-between rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-ink transition hover:bg-black/[0.03] focus:outline-none focus:ring-2 focus:ring-pitch/20"
                   aria-expanded={scoringDetailsOpen}
                 >
-                  <span>{scoringDetailsOpen ? "Hide scoring details" : "Show scoring details"}</span>
+                  <span>{scoringDetailsOpen ? "Hide my points" : "Show my points"}</span>
                   <span className="text-pitch">{scoringDetailsOpen ? "▲" : "▼"}</span>
                 </button>
                 {scoringDetailsOpen && (
@@ -326,12 +365,12 @@ function MatchCard({
                       )}
                         <div className="flex justify-between gap-3">
                           <span className="text-ink/45">Actual result</span>
-                          <span className="font-black text-ink">{match.teamAScore} - {match.teamBScore}</span>
+                          <span className="font-black text-ink">{match.teamA} {match.teamAScore} - {match.teamBScore} {match.teamB}</span>
                         </div>
                         {hasPenaltyResult && (
                           <div className="flex justify-between gap-3">
                             <span className="text-ink/45">Penalties</span>
-                            <span className="text-right font-black text-pitch">{penaltyWinner(match)} wins {match.teamAPkScore} - {match.teamBPkScore}</span>
+                            <span className="text-right font-black text-pitch">{penaltyWinner(match)} wins {formatPenaltyScore(match)}</span>
                           </div>
                         )}
                       </div>
