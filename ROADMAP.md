@@ -16,7 +16,10 @@ Current focus: improve stability, polish, and workflow.
 - [x] Auto-scroll to today's match
 - [x] Back to top button
 - [x] Maintenance mode
-- [ ] Leaderboard redesign
+- [x] Leaderboard redesign
+- [x] Collapsible match scoring details
+- [x] Leaderboard match history redesign
+- [ ] Admin edit match date/time
 - [ ] Dark mode
 
 ---
