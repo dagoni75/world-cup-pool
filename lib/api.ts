@@ -1511,15 +1511,14 @@ export async function saveMatchTime(player: Player, matchId: string, startsAt: s
   if (matchError) throw new Error(matchError.message);
   if (!match) throw new Error("Match not found.");
 
-  const { data, error } = await supabase.rpc("app_admin_set_match_time", {
-    p_player_id: player.id,
-    p_token: player.token,
+  const { error } = await supabase.rpc("app_admin_set_match_time", {
     p_match_id: matchId,
+    p_player_id: player.id,
     p_starts_at: new Date(startsAt).toISOString(),
+    p_token: player.token,
   });
 
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("Match not found.");
 }
 
 export async function generateTestGroupResults(player: Player) {
