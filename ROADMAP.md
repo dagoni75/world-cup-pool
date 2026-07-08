@@ -17,9 +17,6 @@ Current focus: knockout polish and admin control.
 - [ ] Collapsible knockout points details
 - [ ] Admin edit teams / bracket matchups
 - [ ] Admin edit penalty shootout result
-
-Current focus: improve stability, polish, and workflow.
-
 - [x] Create develop branch
 - [x] Auto-scroll to today's match
 - [x] Back to top button
